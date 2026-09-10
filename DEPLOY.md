@@ -73,33 +73,29 @@ pm2 save
 pm2 startup
 ```
 
-### Step 3: Nginx Reverse Proxy (HTTPS + SSL)
-```nginx
-server {
-    listen 80;
-    server_name pay.yourdomain.com;
-    return 301 https://$host$request_uri;
-}
+### Step 3: Caddy Reverse Proxy (Automatic HTTPS & SSL)
 
-server {
-    listen 443 ssl http2;
-    server_name pay.yourdomain.com;
+Install Caddy (Ubuntu / Debian):
+```bash
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install caddy
+```
 
-    ssl_certificate /etc/letsencrypt/live/pay.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/pay.yourdomain.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+Add to `/etc/caddy/Caddyfile`:
+```caddy
+pay.yourdomain.com {
+    reverse_proxy 127.0.0.1:3000
 }
 ```
+
+Reload Caddy:
+```bash
+sudo systemctl reload caddy
+```
+*(Caddy automatically provisions, renews, and configures Let's Encrypt TLS/SSL certificates with zero manual certbot commands).*
 
 ---
 
