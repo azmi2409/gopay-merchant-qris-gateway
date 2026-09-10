@@ -1,5 +1,6 @@
 <script lang="ts">
   import { endpoints } from '$lib/constants';
+  import PaymentChart from '$lib/components/PaymentChart.svelte';
 
   let { data } = $props();
 
@@ -504,22 +505,9 @@
               </div>
 
               {#if dashboard.daily && dashboard.daily.length > 0}
-                {@const maxVal = Math.max(...dashboard.daily.map((r: any) => Number(r.amount)), 1)}
-                <div class="h-48 flex items-end gap-2 pt-6">
-                  {#each dashboard.daily as row}
-                    {@const heightPct = Math.max(4, Math.round((Number(row.amount) / maxVal) * 100))}
-                    <div
-                      class="flex-1 bg-emerald-500/80 hover:bg-emerald-400 rounded-t transition-all group relative cursor-pointer min-w-[6px]"
-                      style="height: {heightPct}%"
-                    >
-                      <div class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-neutral-900 border border-neutral-700 text-[10px] text-white py-1 px-2 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 transition-opacity">
-                        <span class="font-bold">{row.day}</span>: {money(row.amount)}
-                      </div>
-                    </div>
-                  {/each}
-                </div>
+                <PaymentChart daily={dashboard.daily} />
               {:else}
-                <div class="h-48 flex items-center justify-center text-xs text-neutral-500">
+                <div class="h-52 flex items-center justify-center text-xs text-neutral-500">
                   Belum ada transaksi lunas dalam rentang waktu ini.
                 </div>
               {/if}
@@ -746,10 +734,39 @@
           <!-- Step 1: Static QRIS -->
           <form onsubmit={handleSaveSettings} class="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl p-6 backdrop-blur-sm space-y-4">
             <div>
-              <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">01 / Identitas Pembayaran (Wajib)</span>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">01 / Identitas Pembayaran (Wajib)</span>
+                {#if dashboard?.setup?.qris_configured}
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-950/80 border border-emerald-800 text-emerald-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    Sudah Dikonfigurasi
+                  </span>
+                {:else}
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-950/80 border border-amber-800 text-amber-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                    Belum Dikonfigurasi
+                  </span>
+                {/if}
+              </div>
               <h3 class="text-xl font-bold text-white mt-1">Konfigurasi QRIS Statis</h3>
               <p class="text-xs text-neutral-400 mt-1">Pilih gambar QR untuk didekode langsung secara privat di browser Anda, atau tempel string EMVCo manual.</p>
             </div>
+
+            {#if dashboard?.setup?.qris_configured}
+              <div class="p-3.5 bg-emerald-950/30 border border-emerald-800/40 rounded-xl text-xs space-y-1">
+                <div class="flex items-center justify-between text-neutral-300">
+                  <span class="font-medium text-emerald-400">Status Template QRIS:</span>
+                  <span class="font-bold text-white">Aktif & Tersimpan</span>
+                </div>
+                {#if dashboard?.setup?.merchant_id_configured}
+                  <div class="flex items-center justify-between text-neutral-400">
+                    <span>Merchant ID:</span>
+                    <span class="font-mono text-neutral-200">{dashboard.setup.merchant_id || 'Terkonfigurasi'}</span>
+                  </div>
+                {/if}
+                <p class="text-[11px] text-neutral-400 pt-1">Anda dapat mengunggah gambar QR baru atau memasukkan string baru di bawah untuk memperbarui template kapan saja.</p>
+              </div>
+            {/if}
 
             <div class="p-4 bg-neutral-950 border border-dashed border-neutral-800 rounded-xl text-center">
               <label for="qris-img-input" class="cursor-pointer block">
@@ -808,10 +825,44 @@
           <div class="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl p-6 backdrop-blur-sm space-y-6">
             <form onsubmit={handleRequestOtp} class="space-y-4">
               <div>
-                <span class="text-xs font-bold text-neutral-400 uppercase tracking-widest">02 / Sesi GoBiz (Opsional untuk Auto-Check)</span>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-neutral-400 uppercase tracking-widest">02 / Sesi GoBiz (Opsional)</span>
+                  {#if dashboard?.setup?.session_configured}
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-950/80 border border-emerald-800 text-emerald-400">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      Terhubung
+                    </span>
+                  {:else}
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-neutral-800 border border-neutral-700 text-neutral-400">
+                      Belum Terhubung
+                    </span>
+                  {/if}
+                </div>
                 <h3 class="text-xl font-bold text-white mt-1">Sambungkan Akun GoBiz</h3>
                 <p class="text-xs text-neutral-400 mt-1">Kirim OTP ke nomor telepon terdaftar GoBiz untuk verifikasi mutasi otomatis secara real-time.</p>
               </div>
+
+              {#if dashboard?.setup?.session_configured}
+                <div class="p-3.5 bg-emerald-950/30 border border-emerald-800/40 rounded-xl text-xs space-y-1">
+                  <div class="flex items-center justify-between text-neutral-300">
+                    <span class="font-medium text-emerald-400">Status Sesi:</span>
+                    <span class="font-bold text-white">Aktif (Verifikasi Otomatis Nyala)</span>
+                  </div>
+                  {#if dashboard?.setup?.outlet_name}
+                    <div class="flex items-center justify-between text-neutral-400">
+                      <span>Outlet:</span>
+                      <span class="text-white font-semibold">{dashboard.setup.outlet_name}</span>
+                    </div>
+                  {/if}
+                  {#if dashboard?.setup?.session_expires_at}
+                    <div class="flex items-center justify-between text-neutral-400">
+                      <span>Berlaku Hingga:</span>
+                      <span class="text-neutral-300">{new Date(dashboard.setup.session_expires_at).toLocaleString('id-ID')}</span>
+                    </div>
+                  {/if}
+                  <p class="text-[11px] text-neutral-400 pt-1">Kirim OTP ulang di bawah jika Anda ingin mengganti akun GoBiz atau memperbarui sesi secara manual.</p>
+                </div>
+              {/if}
 
               <div>
                 <label for="phone-input" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-2">Nomor Telepon GoBiz</label>
