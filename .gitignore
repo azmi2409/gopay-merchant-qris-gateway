@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Production Build & Coverage
+dist/
+coverage/
+
+# Environment & Sensitive GoPay Sessions
+.env
+.env.*.local
+.gopay_cache.json
+.GOPAY_SESI_JANGAN_DIHAPUS.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Obfuscation & Temporary files
+*.raw.js
+obfuscate.js
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
