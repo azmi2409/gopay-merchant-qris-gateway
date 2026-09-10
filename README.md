@@ -202,6 +202,25 @@ pnpm login
 | `GET` | `/api/v1/healthz` | Public | Liveness & Readiness probe (Docker/K8s) |
 | `GET` | `/api/v1/logs` | API Key (`x-api-key`) | Gateway audit and activity logs |
 
+### Generate a QRIS payment with curl
+
+With the default `AUTH_MODE=api_key` configuration:
+
+```bash
+curl --request POST http://localhost:3000/api/v1/qris \
+  --header "Content-Type: application/json" \
+  --header "x-api-key: your_static_api_key_here" \
+  --data '{
+    "amount": 50000,
+    "reference": "INV-001",
+    "attributes": {
+      "customer_id": "CUST-99"
+    }
+  }'
+```
+
+The response includes `qris_url`, which opens the mobile-responsive payment page, and `qris_code`, which contains the raw dynamic QRIS payload. For `AUTH_MODE=jwt`, replace the `x-api-key` header with `Authorization: Bearer <signed_jwt_token>`.
+
 ---
 
 ## Webhook Specification
