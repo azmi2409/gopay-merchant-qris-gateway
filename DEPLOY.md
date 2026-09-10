@@ -67,7 +67,7 @@ npm install -g pm2
 ```bash
 pnpm build
 pm2 start apps/gateway/dist/server.js --name gopay-gateway --time
-pm2 start apps/admin/dist/server.js --name gopay-admin --time
+pm2 start apps/admin/build/index.js --name gopay-admin --time
 pm2 save
 pm2 startup
 ```
