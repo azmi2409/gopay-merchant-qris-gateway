@@ -1,5 +1,9 @@
 # gopay-merchant-qris-gateway
 
+[![CI](https://github.com/azmi2409/gopay-merchant-qris-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/azmi2409/gopay-merchant-qris-gateway/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node: 24 LTS](https://img.shields.io/badge/Node-24_LTS-green.svg)](https://nodejs.org)
+
 GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1) built with TypeScript and Node.js.
 
 ## Key Features
