@@ -29,7 +29,6 @@ src/
 tests/                 # Vitest unit & integration test suites
 public/                # Decoupled frontend (HTML, CSS, JS with UnoCSS)
 dist/                  # Compiled JavaScript production build
-legacy/                # Backup of original CommonJS files
 ```
 
 ---

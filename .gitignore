@@ -5,6 +5,7 @@ node_modules/
 # Production Build & Coverage
 dist/
 coverage/
+legacy/
 
 # Environment & Sensitive GoPay Sessions
 .env
