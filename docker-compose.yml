@@ -1,11 +1,23 @@
 services:
   gopay-gateway:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: gopay-gateway
-    restart: always
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     env_file:
       - .env
     environment:
       - PORT=3000
+      - NODE_ENV=production
+    volumes:
+      # Mount local data directory for persistent sqlite file storage (if using file:data/gateway.db)
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/v1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
