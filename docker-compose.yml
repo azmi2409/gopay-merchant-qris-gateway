@@ -38,6 +38,8 @@ services:
     env_file:
       - .env
     environment:
+      - PORT=3100
+      - HOST=0.0.0.0
       - ADMIN_PORT=3100
       - NODE_ENV=production
       - GATEWAY_INTERNAL_URL=http://gopay-gateway:3001
