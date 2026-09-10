@@ -1,16 +1,14 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import { apiKeyAuth } from '../middlewares/auth';
-import { generateDynamicQRIS } from '../utils/qris';
 import {
-  saveQRISRecord,
   getQRISRecord,
   updateQRISStatus,
-  deleteQRISRecord,
   QRIS_EXPIRY_MS,
   logActivity,
   verifyPayment
 } from '../services/paymentService';
+import { createQris, QrisCreationError } from '../services/qrisService';
 
 export const qrisRouter: Router = Router();
 
@@ -21,92 +19,21 @@ function getParamId(param: string | string[] | undefined): string {
 
 // POST /api/v1/qris
 qrisRouter.post('/api/v1/qris', apiKeyAuth, async (req: Request, res: Response) => {
-  const amountParam = req.body?.amount ?? req.query?.amount;
-  const reference = req.body?.reference ?? req.query?.reference ?? null;
-  const attributes = req.body?.attributes ?? null;
-  const callbackUrlParam = req.body?.callback_url ?? req.query?.callback_url ?? null;
-
-  if (!amountParam || isNaN(Number(amountParam)) || Number(amountParam) <= 0) {
-    res.status(400).json({
+  try {
+    const data = await createQris({
+      amount: req.body?.amount ?? req.query?.amount,
+      reference: req.body?.reference ?? req.query?.reference,
+      attributes: req.body?.attributes,
+      callbackUrl: req.body?.callback_url ?? req.query?.callback_url
+    }, `${req.protocol}://${req.get('host')}`);
+    res.status(201).json({ success: true, data });
+  } catch (error) {
+    const creationError = error instanceof QrisCreationError ? error : null;
+    res.status(creationError?.status || 500).json({
       success: false,
-      message: 'Invalid payment amount (send { "amount": 50000 } in body)'
+      message: creationError?.message || 'Failed to create QRIS'
     });
-    return;
   }
-
-  let callbackUrl: string | null = null;
-  if (callbackUrlParam !== null && callbackUrlParam !== '') {
-    try {
-      const parsedCallbackUrl = new URL(String(callbackUrlParam));
-      if (!['http:', 'https:'].includes(parsedCallbackUrl.protocol)) throw new Error();
-      callbackUrl = parsedCallbackUrl.toString();
-    } catch {
-      res.status(400).json({
-        success: false,
-        message: 'callback_url must be an absolute HTTP or HTTPS URL'
-      });
-      return;
-    }
-  }
-
-  const staticTemplate = process.env.QRIS_STATIC;
-  if (!staticTemplate) {
-    res.status(500).json({
-      success: false,
-      message: 'QRIS_STATIC is not configured in .env'
-    });
-    return;
-  }
-
-  const amount = parseInt(String(amountParam), 10);
-  const dynamicCode = generateDynamicQRIS(staticTemplate, amount);
-  if (!dynamicCode) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate dynamic QRIS from static template'
-    });
-    return;
-  }
-
-  const qrisId = Math.random().toString(36).substring(2, 10);
-  const trxId = 'TRX-' + Math.random().toString(36).substring(2, 10).toUpperCase();
-  const expiresAt = new Date(Date.now() + QRIS_EXPIRY_MS);
-  const createdAt = new Date();
-
-  await saveQRISRecord({
-    id: qrisId,
-    data: dynamicCode,
-    amount,
-    trxId,
-    reference: reference ? String(reference) : null,
-    attributes: typeof attributes === 'object' && attributes !== null ? attributes : null,
-    callbackUrl,
-    expiresAt,
-    createdAt,
-    status: 'PENDING'
-  });
-
-  const host = req.get('host');
-  const protocol = req.protocol;
-  const publicUrl = `${protocol}://${host}/qr/${qrisId}`;
-
-  logActivity('INFO', `Dynamic QRIS created | TRX-ID: ${trxId} | Amount: Rp ${amount}`);
-
-  res.status(201).json({
-    success: true,
-    data: {
-      qris_id: qrisId,
-      trx_id: trxId,
-      reference: reference ? String(reference) : null,
-      attributes: typeof attributes === 'object' && attributes !== null ? attributes : null,
-      callback_url: callbackUrl,
-      qris_url: publicUrl,
-      qris_code: dynamicCode,
-      amount,
-      expires_at: expiresAt.toISOString(),
-      expires_in: '5 minutes'
-    }
-  });
 });
 
 // GET /api/v1/qris/:id
@@ -171,7 +98,7 @@ qrisRouter.get('/api/v1/qris/:id/status', async (req: Request, res: Response) =>
   }
 
   if (Date.now() > qris.expiresAt.getTime()) {
-    await deleteQRISRecord(qrisId);
+    await updateQRISStatus(qrisId, 'EXPIRED');
     res.status(410).json({
       success: false,
       paid: false,
@@ -247,7 +174,7 @@ qrisRouter.get('/qr/:id', async (req: Request, res: Response) => {
 
   if (req.query.format === 'raw' || req.query.raw === '1') {
     if (Date.now() > qris.expiresAt.getTime()) {
-      await deleteQRISRecord(id);
+      await updateQRISStatus(id, 'EXPIRED');
       res.status(410).send('QRIS Expired');
       return;
     }
@@ -260,7 +187,7 @@ qrisRouter.get('/qr/:id', async (req: Request, res: Response) => {
 
   if (req.query.download === '1') {
     if (Date.now() > qris.expiresAt.getTime()) {
-      await deleteQRISRecord(id);
+      await updateQRISStatus(id, 'EXPIRED');
       res.status(410).send('QRIS Expired');
       return;
     }
@@ -283,5 +210,5 @@ qrisRouter.get('/qr/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  res.sendFile(path.join(process.cwd(), 'public', 'qris.html'));
+  res.sendFile(path.join(__dirname, '..', '..', 'public', 'qris.html'));
 });

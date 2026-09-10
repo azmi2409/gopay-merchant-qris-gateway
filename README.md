@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node: 24 LTS](https://img.shields.io/badge/Node-24_LTS-green.svg)](https://nodejs.org)
 
-GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1) built with TypeScript and Node.js.
+GoPay Merchant & Dynamic QRIS Payment Gateway monorepo with an isolated web administration service.
 
 [Setup](#step-by-step-setup-guide) | [API](#rest-v1-api-specification) | [Contributing](CONTRIBUTE.md) | [Changelog](CHANGELOG.md) | [Deployment](DEPLOY.md)
 
@@ -30,26 +30,23 @@ GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1) built with TypeScrip
 - **Decoupled Frontend**: Responsive payment page built with native HTML, CSS, and JavaScript (`/qr/:id`).
 - **Comprehensive Unit & Integration Tests**: Full test suite running on Vitest.
 - **Multi-stage Docker Build**: Production-ready with lightweight Node.js Alpine container.
+- **Isolated Admin Service**: Guided onboarding, browser-based setup, analytics, reports, OpenAPI-style reference, and persistent log viewer run outside the gateway process.
+- **Admin QRIS Generator**: Create, open, and download five-minute dynamic QRIS payments without exposing the public API key to the browser.
+- **Webhook Management**: Verify, register, list, and remove payment webhooks from gateway setup; stored signing secrets are never displayed.
 
 ---
 
 ## Project Structure
 
 ```
-src/
-├── types/             # Type definitions (session, qris, gopay, payment)
-├── utils/             # CRC16, crypto, retry, logger, db & EMVCo TLV parsing
-├── services/          # SessionManager, PaymentService, WebhookService
-├── middlewares/       # API Key authentication middleware
-├── routes/            # RESTful v1 QRIS, Transactions, Webhooks, and System
-├── app.ts             # Express app setup & middleware pipeline
-├── server.ts          # Server listener & background maintenance timers
-└── login.ts           # Interactive CLI login for GoBiz OTP
-webhook.js             # Standalone test server for inspecting incoming webhooks
-tests/                 # Vitest unit & integration test suites
-public/                # Decoupled frontend (HTML, CSS, JS with UnoCSS)
-dist/                  # Compiled JavaScript production build
+apps/admin/            # Separate Express admin service and native web UI
+apps/gateway/          # Payment API, customer page, management API, and tests
+docker-compose.yml     # Isolated gateway and admin containers
 ```
+
+The public gateway listens on `PORT` (`3000`). Its management API listens separately on `INTERNAL_PORT` (`3001`) and defaults to loopback only. The admin service listens on `ADMIN_PORT` (`3100`) and calls the management listener server-to-server using `ADMIN_API_KEY`. Never expose port `3001` publicly.
+
+Docker Compose persists SQLite data in the managed `gateway-data` named volume. The admin interface uses the self-hosted CSP-compatible Alpine.js runtime; no frontend CDN is required.
 
 ---
 
@@ -66,7 +63,20 @@ Copy the template configuration:
 cp .env.example .env
 ```
 
-Now configure each required key in `.env`:
+Configure the deployment trust roots in `.env`. Merchant QRIS and GoBiz login are completed later in the admin panel.
+
+```env
+API_KEY=replace_with_a_random_public_api_key
+GOPAY_MASTER_KEY=replace_with_a_64_character_hex_key
+ADMIN_PASSWORD=replace_with_a_strong_admin_password
+ADMIN_SESSION_SECRET=replace_with_at_least_32_random_characters
+ADMIN_API_KEY=replace_with_a_different_32_character_secret
+PUBLIC_GATEWAY_URL=https://pay.example.com
+```
+
+`ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, and `ADMIN_API_KEY` must be independent values. The admin browser receives only a signed, `HttpOnly`, `SameSite=Strict` session cookie. It never receives the service credential or GoBiz tokens.
+
+Set `PUBLIC_GATEWAY_URL` to the externally reachable gateway origin. Admin-generated QRIS payment links use this value instead of the private container hostname.
 
 #### A. Authentication Mode: `AUTH_MODE=api_key` or `AUTH_MODE=jwt`
 
@@ -162,15 +172,16 @@ The gateway automatically stores its encrypted session inside the `app_sessions`
 
 ---
 
-### 3. Log In to GoBiz (One-time Setup)
-Authenticate your GoBiz merchant account to generate the encrypted session:
-```bash
-pnpm login
-```
-1. Enter your registered GoBiz phone number (e.g. `08XXXXXXXXXX`).
-2. Enter the 4-digit SMS OTP received.
-3. The session is encrypted with AES-256-GCM and saved to `gopay_session`.
-*(The gateway automatically auto-refreshes tokens in the background every 6 hours and on startup)*.
+### 3. Complete Browser Setup
+
+1. Start both services with `docker compose up -d --build`.
+2. Open `http://localhost:3100/admin/` and sign in with `ADMIN_PASSWORD`.
+3. Open **Gateway setup**, save the static merchant QRIS and optional merchant ID.
+4. Request and verify the GoBiz SMS OTP in the same page.
+
+You can upload a PNG, JPEG, WebP, or GIF containing the merchant's static QRIS. Current Chrome and Edge decode the image locally through `BarcodeDetector`; the source image is never uploaded or stored. Browsers without this API show a manual payload fallback. The gateway validates that decoded text is an Indonesian static QRIS before encrypting it.
+
+The gateway encrypts runtime settings and GoBiz session data with AES-256-GCM. OTP and device tokens stay in admin-process memory and are not returned to browser JavaScript. First-time onboarding remains active until both static QRIS and the GoBiz session are configured.
 
 ---
 
@@ -179,6 +190,7 @@ pnpm login
 - **Development mode (instant auto-reload)**:
   ```bash
   pnpm dev
+  pnpm dev:admin
   ```
 - **Run automated test suite**:
   ```bash
@@ -188,6 +200,7 @@ pnpm login
   ```bash
   pnpm run build
   pnpm start
+  pnpm --filter @gopay/admin start
   ```
 - **Run local webhook inspector server (optional)**:
   ```bash

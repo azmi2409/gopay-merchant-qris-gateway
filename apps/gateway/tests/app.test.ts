@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
+
+vi.mock('../src/services/paymentService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/paymentService')>()),
+  verifyPayment: vi.fn().mockRejectedValue(new Error('Synthetic verification unavailable'))
+}));
+
 import { app } from '../src/app';
 import { initDatabase, getDatabase } from '../src/utils/db';
 

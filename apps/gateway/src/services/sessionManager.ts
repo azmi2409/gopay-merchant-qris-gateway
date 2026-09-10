@@ -334,7 +334,7 @@ export async function getValidHeaders(
   let session = await loadSessionAsync();
 
   if (!session || !session.access_token) {
-    logger.warn('[SessionManager] WARNING: GoPay session not available. Run `npm run login`.');
+    logger.warn('[SessionManager] WARNING: GoPay session not available. Complete admin setup.');
     return null;
   }
 

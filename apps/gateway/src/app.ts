@@ -31,7 +31,7 @@ export function createApp(): Express {
     next();
   });
 
-  app.use(express.static(path.join(process.cwd(), 'public')));
+  app.use(express.static(path.join(__dirname, '..', 'public')));
 
   // Mount REST v1 routes
   app.use(systemRouter);

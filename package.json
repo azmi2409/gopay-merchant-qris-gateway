@@ -1,39 +1,21 @@
 {
-  "name": "gopay-merchant-qris-gateway",
+  "name": "gopay-gateway-monorepo",
+  "private": true,
   "version": "1.0.0",
   "description": "GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1)",
   "author": "Azmi Muwahid (https://github.com/azmi2409)",
   "license": "MIT",
   "packageManager": "pnpm@11.23.0",
-  "main": "dist/server.js",
   "engines": {
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "webhook:test-server": "node webhook.js",
-    "login": "tsx src/login.ts"
-  },
-  "dependencies": {
-    "@libsql/client": "^0.18.0",
-    "axios": "^1.20.0",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1"
-  },
-  "devDependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^22.20.2",
-    "@types/supertest": "^7.2.1",
-    "nodemon": "^3.1.14",
-    "supertest": "^7.2.2",
-    "tsx": "^4.23.13",
-    "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "build": "pnpm --filter @gopay/gateway build && pnpm --filter @gopay/admin build",
+    "start": "pnpm --filter @gopay/gateway start",
+    "dev": "pnpm --filter @gopay/gateway dev",
+    "dev:admin": "tsx watch apps/admin/src/server.ts",
+    "test": "pnpm --filter @gopay/gateway test && pnpm --filter @gopay/admin test",
+    "test:watch": "pnpm --filter @gopay/gateway test:watch",
+    "webhook:test-server": "node webhook.js"
   }
 }
