@@ -43,12 +43,19 @@ export async function initDatabase(client = getDatabase()): Promise<void> {
       data TEXT NOT NULL,
       reference TEXT,
       attributes TEXT,
+      callback_url TEXT,
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       status TEXT NOT NULL,
       transaction_json TEXT
     );
   `);
+
+  try {
+    await client.execute(`ALTER TABLE qris ADD COLUMN callback_url TEXT;`);
+  } catch (error: any) {
+    if (!String(error.message).includes('duplicate column name')) throw error;
+  }
 
   await client.execute(`
     CREATE TABLE IF NOT EXISTS claimed_transactions (

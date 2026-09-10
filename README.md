@@ -201,7 +201,7 @@ pnpm login
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `POST` | `/api/v1/qris` | API Key (`x-api-key`) | Create dynamic QRIS (`{ "amount": 50000, "reference": "INV-001", "attributes": { ... } }`) |
+| `POST` | `/api/v1/qris` | API Key (`x-api-key`) | Create dynamic QRIS with optional `reference`, `attributes`, and `callback_url` |
 | `GET` | `/api/v1/qris/:id` | Public | QRIS metadata, reference, attributes, and amount payload |
 | `GET` | `/api/v1/qris/:id/status` | Public | Real-time payment verification status |
 | `GET` | `/qr/:id` | Public | Interactive customer payment landing page |
@@ -227,6 +227,7 @@ curl --request POST http://localhost:3000/api/v1/qris \
   --data '{
     "amount": 50000,
     "reference": "INV-001",
+    "callback_url": "https://merchant.example.com/payment/result",
     "attributes": {
       "customer_id": "CUST-99"
     }
@@ -234,6 +235,8 @@ curl --request POST http://localhost:3000/api/v1/qris \
 ```
 
 The response includes `qris_url`, which opens the mobile-responsive payment page, and `qris_code`, which contains the raw dynamic QRIS payload. For `AUTH_MODE=jwt`, replace the `x-api-key` header with `Authorization: Bearer <signed_jwt_token>`.
+
+`callback_url` is optional and must be an absolute HTTP or HTTPS URL. When supplied, the payment page displays a **Back to merchant** button and automatically redirects after three seconds when payment succeeds or the QRIS expires. The gateway preserves existing callback query parameters and adds `payment_status=success|failed`, `qris_id`, `trx_id`, and `reference` when available.
 
 ---
 

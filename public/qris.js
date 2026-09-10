@@ -13,6 +13,7 @@
     let isExpired = false;
     let pollTimer = null;
     let countdownInterval = null;
+    let redirectTimer = null;
 
     // ── Fetch QRIS data from API ──
     async function init() {
@@ -33,6 +34,7 @@
             document.getElementById('amount-display').textContent = qrisData.formatted_amount;
             document.getElementById('qr-image').src = qrisData.qr_image_url;
             document.getElementById('payment-card').style.removeProperty('display');
+            configureMerchantReturn();
 
             document.title = 'QRIS Payment - ' + qrisData.formatted_amount;
 
@@ -80,6 +82,7 @@
 
             clearInterval(countdownInterval);
             stopAutoPoll();
+            scheduleMerchantRedirect('failed');
             return;
         }
 
@@ -174,6 +177,40 @@
 
         // 🎉 Fire confetti
         launchConfetti();
+        scheduleMerchantRedirect('success');
+    }
+
+    function getMerchantReturnUrl(status) {
+        if (!qrisData || !qrisData.callback_url) return null;
+
+        const url = new URL(qrisData.callback_url);
+        url.searchParams.set('payment_status', status);
+        url.searchParams.set('qris_id', qrisData.qris_id);
+        url.searchParams.set('trx_id', qrisData.trx_id);
+        if (qrisData.reference) url.searchParams.set('reference', qrisData.reference);
+        return url.toString();
+    }
+
+    function configureMerchantReturn() {
+        const button = document.getElementById('btn-merchant');
+        if (!qrisData.callback_url) return;
+
+        button.hidden = false;
+        button.href = getMerchantReturnUrl('pending');
+    }
+
+    function scheduleMerchantRedirect(status) {
+        const returnUrl = getMerchantReturnUrl(status);
+        if (!returnUrl) return;
+
+        const button = document.getElementById('btn-merchant');
+        button.href = returnUrl;
+        button.textContent = status === 'success'
+            ? 'Kembali ke merchant (pembayaran berhasil)'
+            : 'Kembali ke merchant (pembayaran gagal)';
+
+        if (redirectTimer) clearTimeout(redirectTimer);
+        redirectTimer = setTimeout(() => window.location.assign(returnUrl), 3000);
     }
 
     // ── Auto Poll ──

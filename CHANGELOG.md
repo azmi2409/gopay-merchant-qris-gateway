@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Optional QRIS `callback_url` with success/expiry auto-redirect and merchant-return button.
 - Contribution guidelines and repository instructions for coding agents.
 - Encrypted GoBiz session persistence in LibSQL for stateless deployments.
 - Responsive QRIS payment page with QR image download.

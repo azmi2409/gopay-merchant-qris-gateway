@@ -65,6 +65,7 @@ describe('API Gateway REST v1 Integration Tests', () => {
         .send({
           amount: 50000,
           reference: 'INV-2026-001',
+          callback_url: 'https://merchant.example.com/payment/result?source=store',
           attributes: { customer_id: 'CUST-99', email: 'user@example.com' }
         });
 
@@ -72,6 +73,9 @@ describe('API Gateway REST v1 Integration Tests', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.amount).toBe(50000);
       expect(res.body.data.reference).toBe('INV-2026-001');
+      expect(res.body.data.callback_url).toBe(
+        'https://merchant.example.com/payment/result?source=store'
+      );
       expect(res.body.data.attributes).toEqual({ customer_id: 'CUST-99', email: 'user@example.com' });
       expect(res.body.data.qris_id).toBeDefined();
       expect(res.body.data.trx_id).toMatch(/^TRX-/);
@@ -86,6 +90,9 @@ describe('API Gateway REST v1 Integration Tests', () => {
       expect(dataRes.body.data.qris_id).toBe(qrisId);
       expect(dataRes.body.data.amount).toBe(50000);
       expect(dataRes.body.data.reference).toBe('INV-2026-001');
+      expect(dataRes.body.data.callback_url).toBe(
+        'https://merchant.example.com/payment/result?source=store'
+      );
       expect(dataRes.body.data.attributes).toEqual({ customer_id: 'CUST-99', email: 'user@example.com' });
 
       // GET /api/v1/qris/:id/status
@@ -115,6 +122,26 @@ describe('API Gateway REST v1 Integration Tests', () => {
       expect(downloadRes.headers['content-disposition']).toBe(
         `attachment; filename="qris-${qrisId}.png"`
       );
+    });
+
+    it('POST /api/v1/qris should reject a non-HTTP callback URL', async () => {
+      const res = await request(app)
+        .post('/api/v1/qris')
+        .set('x-api-key', 'test-secret-key-123')
+        .send({ amount: 50000, callback_url: 'javascript:alert(1)' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('callback_url');
+    });
+
+    it('POST /api/v1/qris should keep callback_url optional', async () => {
+      const res = await request(app)
+        .post('/api/v1/qris')
+        .set('x-api-key', 'test-secret-key-123')
+        .send({ amount: 25000 });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.callback_url).toBeNull();
     });
 
     it('GET /api/v1/qris/:id returns 404 for nonexistent id', async () => {

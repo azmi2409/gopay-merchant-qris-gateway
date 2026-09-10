@@ -24,6 +24,7 @@ qrisRouter.post('/api/v1/qris', apiKeyAuth, async (req: Request, res: Response) 
   const amountParam = req.body?.amount ?? req.query?.amount;
   const reference = req.body?.reference ?? req.query?.reference ?? null;
   const attributes = req.body?.attributes ?? null;
+  const callbackUrlParam = req.body?.callback_url ?? req.query?.callback_url ?? null;
 
   if (!amountParam || isNaN(Number(amountParam)) || Number(amountParam) <= 0) {
     res.status(400).json({
@@ -31,6 +32,21 @@ qrisRouter.post('/api/v1/qris', apiKeyAuth, async (req: Request, res: Response) 
       message: 'Invalid payment amount (send { "amount": 50000 } in body)'
     });
     return;
+  }
+
+  let callbackUrl: string | null = null;
+  if (callbackUrlParam !== null && callbackUrlParam !== '') {
+    try {
+      const parsedCallbackUrl = new URL(String(callbackUrlParam));
+      if (!['http:', 'https:'].includes(parsedCallbackUrl.protocol)) throw new Error();
+      callbackUrl = parsedCallbackUrl.toString();
+    } catch {
+      res.status(400).json({
+        success: false,
+        message: 'callback_url must be an absolute HTTP or HTTPS URL'
+      });
+      return;
+    }
   }
 
   const staticTemplate = process.env.QRIS_STATIC;
@@ -64,6 +80,7 @@ qrisRouter.post('/api/v1/qris', apiKeyAuth, async (req: Request, res: Response) 
     trxId,
     reference: reference ? String(reference) : null,
     attributes: typeof attributes === 'object' && attributes !== null ? attributes : null,
+    callbackUrl,
     expiresAt,
     createdAt,
     status: 'PENDING'
@@ -82,6 +99,7 @@ qrisRouter.post('/api/v1/qris', apiKeyAuth, async (req: Request, res: Response) 
       trx_id: trxId,
       reference: reference ? String(reference) : null,
       attributes: typeof attributes === 'object' && attributes !== null ? attributes : null,
+      callback_url: callbackUrl,
       qris_url: publicUrl,
       qris_code: dynamicCode,
       amount,
@@ -117,6 +135,7 @@ qrisRouter.get('/api/v1/qris/:id', async (req: Request, res: Response) => {
       trx_id: qris.trxId,
       reference: qris.reference,
       attributes: qris.attributes,
+      callback_url: qris.callbackUrl,
       amount: qris.amount,
       formatted_amount: formattedAmount,
       qr_image_url: qrImageUrl,

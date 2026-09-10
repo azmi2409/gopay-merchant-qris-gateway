@@ -42,8 +42,8 @@ export function logActivity(
 export async function saveQRISRecord(qris: QRISRecord): Promise<void> {
   const db = getDatabase();
   await db.execute({
-    sql: `INSERT OR REPLACE INTO qris (id, trx_id, amount, data, reference, attributes, created_at, expires_at, status, transaction_json)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT OR REPLACE INTO qris (id, trx_id, amount, data, reference, attributes, callback_url, created_at, expires_at, status, transaction_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       qris.id,
       qris.trxId || null,
@@ -51,6 +51,7 @@ export async function saveQRISRecord(qris: QRISRecord): Promise<void> {
       qris.data,
       qris.reference || null,
       qris.attributes ? JSON.stringify(qris.attributes) : null,
+      qris.callbackUrl || null,
       qris.createdAt.toISOString(),
       qris.expiresAt.toISOString(),
       qris.status,
@@ -76,6 +77,7 @@ export async function getQRISRecord(id: string): Promise<QRISRecord | null> {
     data: String(row.data),
     reference: row.reference ? String(row.reference) : null,
     attributes: row.attributes ? JSON.parse(String(row.attributes)) : null,
+    callbackUrl: row.callback_url ? String(row.callback_url) : null,
     createdAt: new Date(String(row.created_at)),
     expiresAt: new Date(String(row.expires_at)),
     status: row.status as QRISRecord['status'],

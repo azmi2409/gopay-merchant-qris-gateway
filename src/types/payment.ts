@@ -22,6 +22,7 @@ export interface QRISRecord {
   data: string;
   reference?: string | null;
   attributes?: Record<string, unknown> | null;
+  callbackUrl?: string | null;
   createdAt: Date;
   expiresAt: Date;
   status: QRISStatus;
