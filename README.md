@@ -79,6 +79,13 @@ pnpm run build
 pnpm start
 ```
 
+### 7. Run Test Webhook Server (Optional)
+To test webhook delivery locally:
+```bash
+pnpm webhook:test-server
+```
+Listens on `http://localhost:4000` and logs all incoming headers, payloads, and signatures.
+
 ---
 
 ## REST v1 API Specification

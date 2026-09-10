@@ -35,7 +35,30 @@ describe('Webhook Service & REST API', () => {
       expect(res.body.success).toBe(false);
     });
 
-    it('POST /api/v1/webhooks registers and returns registration record', async () => {
+    it('POST /api/v1/webhooks rejects registration if ping does not return 2xx', async () => {
+      vi.mocked(axios.post).mockRejectedValueOnce({
+        response: { status: 500, data: 'Server Error' }
+      });
+
+      const res = await request(app)
+        .post('/api/v1/webhooks')
+        .set('x-api-key', 'test-secret-key-123')
+        .send({
+          url: 'https://myshop.com/callbacks/failing-webhook'
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain('Webhook validation failed');
+      expect(listWebhooks().length).toBe(0);
+    });
+
+    it('POST /api/v1/webhooks pings and saves when ping returns 200', async () => {
+      vi.mocked(axios.post).mockResolvedValueOnce({
+        status: 200,
+        data: { success: true }
+      });
+
       const res = await request(app)
         .post('/api/v1/webhooks')
         .set('x-api-key', 'test-secret-key-123')
@@ -50,6 +73,13 @@ describe('Webhook Service & REST API', () => {
       expect(res.body.data.id).toMatch(/^whk_/);
       expect(res.body.data.url).toBe('https://myshop.com/callbacks/gopay');
       expect(res.body.data.secret).toBe('whsec_test123');
+
+      // Check ping call
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      const [pingUrl, pingBody, pingConfig] = vi.mocked(axios.post).mock.calls[0];
+      expect(pingUrl).toBe('https://myshop.com/callbacks/gopay');
+      expect(pingConfig?.headers?.['X-Webhook-Event']).toBe('webhook.ping');
+      expect(pingConfig?.headers?.['X-Webhook-Signature']).toMatch(/^sha256=[a-f0-9]{64}$/);
 
       const listRes = await request(app)
         .get('/api/v1/webhooks')

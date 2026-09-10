@@ -21,6 +21,39 @@ export interface WebhookPayload {
 // In-memory webhooks store
 export const webhookStore = new Map<string, WebhookRegistration>();
 
+/**
+ * Pings the target webhook URL with a verification ping.
+ * Returns true if the endpoint returns a 2xx HTTP status.
+ */
+export async function pingWebhookUrl(url: string, secret?: string): Promise<boolean> {
+  const pingPayload: WebhookPayload = {
+    id: 'ping_' + Math.random().toString(36).substring(2, 10),
+    event: 'webhook.ping',
+    timestamp: new Date().toISOString(),
+    data: { message: 'Webhook verification ping' }
+  };
+  const body = JSON.stringify(pingPayload);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'GoPay-Merchant-Webhook/1.0',
+    'X-Webhook-Event': 'webhook.ping',
+    'X-Webhook-Delivery': pingPayload.id
+  };
+
+  if (secret) {
+    const hmac = crypto.createHmac('sha256', secret).update(body).digest('hex');
+    headers['X-Webhook-Signature'] = `sha256=${hmac}`;
+  }
+
+  const response = await axios.post(url, body, {
+    headers,
+    timeout: 5000,
+    validateStatus: (status) => status >= 200 && status < 300
+  });
+
+  return response.status >= 200 && response.status < 300;
+}
+
 export function registerWebhook(
   url: string,
   events: string[] = ['payment.success'],

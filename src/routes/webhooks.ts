@@ -4,19 +4,32 @@ import {
   registerWebhook,
   removeWebhook,
   listWebhooks,
-  dispatchWebhookEvent
+  dispatchWebhookEvent,
+  pingWebhookUrl
 } from '../services/webhookService';
 
 export const webhookRouter: Router = Router();
 
-// POST /api/v1/webhooks - Register new webhook
-webhookRouter.post('/api/v1/webhooks', apiKeyAuth, (req: Request, res: Response) => {
+// POST /api/v1/webhooks - Register new webhook with pre-flight ping
+webhookRouter.post('/api/v1/webhooks', apiKeyAuth, async (req: Request, res: Response) => {
   const { url, events, secret } = req.body || {};
 
   if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
     res.status(400).json({
       success: false,
       message: 'Invalid webhook url (must start with http:// or https://)'
+    });
+    return;
+  }
+
+  // Pre-flight ping to ensure webhook endpoint returns 2xx
+  try {
+    await pingWebhookUrl(url, secret);
+  } catch (err: any) {
+    const status = err.response ? `HTTP ${err.response.status}` : err.message;
+    res.status(400).json({
+      success: false,
+      message: `Webhook validation failed: destination did not return 2xx (${status})`
     });
     return;
   }
