@@ -59,14 +59,49 @@ cp .env.example .env
 
 Now configure each required key in `.env`:
 
-#### A. `API_KEY` (Gateway Authentication Key)
-Generates a random 32-byte secret used to protect private endpoints (`/api/v1/qris`, `/api/v1/transactions`, `/api/v1/webhooks`):
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-Place the output in `.env`:
-```env
-API_KEY=your_generated_hex_key_here
+#### A. Authentication Mode: `AUTH_MODE=api_key` or `AUTH_MODE=jwt`
+
+The gateway supports two selectable authentication modes for private routes (`/api/v1/qris`, `/api/v1/transactions`, `/api/v1/webhooks`):
+
+1. **Static API Key (`AUTH_MODE=api_key`, default)**:
+   - Generate a 32-byte secret:
+     ```bash
+     node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+     ```
+   - Set in `.env`:
+     ```env
+     AUTH_MODE=api_key
+     API_KEY=your_static_api_key_here
+     ```
+   - Send requests with header: `x-api-key: your_static_api_key_here` (or query `?api_key=...`).
+
+2. **Self-Signed JWT Bearer Token (`AUTH_MODE=jwt`)**:
+   - Only configure the signing secret in `.env`:
+     ```env
+     AUTH_MODE=jwt
+     JWT_SECRET=your_super_secret_jwt_key
+     ```
+   - Clients sign their own HS256 tokens and send requests with:
+     ```http
+     Authorization: Bearer <signed_jwt_token>
+     ```
+   - (Optional) Tokens can also be supplied via `?token=<jwt>`.
+
+##### How to sign a JWT token for the client (Node.js example):
+```javascript
+const crypto = require('crypto');
+
+function signToken(payload, secret, expiresInSeconds = 86400) {
+  const b64 = (s) => Buffer.from(s).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const header = b64(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  const body = b64(JSON.stringify({ ...payload, exp, iat: Math.floor(Date.now() / 1000) }));
+  const sig = b64(crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest());
+  return `${header}.${body}.${sig}`;
+}
+
+const token = signToken({ sub: 'merchant_admin', role: 'admin' }, 'your_super_secret_jwt_key');
+console.log('Bearer Token:', token);
 ```
 
 #### B. `QRIS_STATIC` (Your Static Merchant QR Code)
