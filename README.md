@@ -29,7 +29,7 @@ GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1) built with TypeScrip
 ```
 src/
 ├── types/             # Type definitions (session, qris, gopay, payment)
-├── utils/             # CRC16, crypto, retry, logger & EMVCo TLV parsing
+├── utils/             # CRC16, crypto, retry, logger, db & EMVCo TLV parsing
 ├── services/          # SessionManager, PaymentService, WebhookService
 ├── middlewares/       # API Key authentication middleware
 ├── routes/            # RESTful v1 QRIS, Transactions, Webhooks, and System
@@ -44,60 +44,107 @@ dist/                  # Compiled JavaScript production build
 
 ---
 
-## Installation & Setup
+## Step-by-Step Setup Guide
 
 ### 1. Install Dependencies
 ```bash
 pnpm install
 ```
 
-### 2. Configure Environment (`.env`)
-Copy `.env.example` to `.env`:
-```env
-PORT=3000
-API_KEY=your_secret_api_key
-QRIS_STATIC=00020101021126610014COM.GO-JEK.WWW...
-GOPAY_MERCHANT_ID=your_merchant_id
-GOPAY_MASTER_KEY= # Optional: if empty, auto-generated to gopay.key (chmod 0600)
-
-# Database (LibSQL / SQLite / Cloudflare SQLite / Turso)
-# Default local file: file:data/gateway.db
-DATABASE_URL=
-DATABASE_AUTH_TOKEN=
+### 2. Setting Up the Keys & Environment (`.env`)
+Copy the template configuration:
+```bash
+cp .env.example .env
 ```
 
-### 3. Startup & Encrypted Session
-- The gateway uses **AES-256-GCM** encryption following the Rails Master Key pattern (`gopay.key` / `GOPAY_MASTER_KEY`) to secure session data in `gopay_session`.
-- When starting the application (`pnpm dev` or `pnpm start`):
-  - **No Session**: When run in an interactive terminal (TTY), the CLI will automatically offer an OTP login prompt.
-  - **Expired Session**: The system automatically attempts a token refresh with GoBiz before binding to the port.
-- You can also initiate a login anytime via:
+Now configure each required key in `.env`:
+
+#### A. `API_KEY` (Gateway Authentication Key)
+Generates a random 32-byte secret used to protect private endpoints (`/api/v1/qris`, `/api/v1/transactions`, `/api/v1/webhooks`):
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+Place the output in `.env`:
+```env
+API_KEY=your_generated_hex_key_here
+```
+
+#### B. `QRIS_STATIC` (Your Static Merchant QR Code)
+1. Open your **GoBiz** app or web dashboard (or scan your physical merchant QRIS sticker).
+2. Decode the QR code using any QR scanner app to obtain the raw string (it begins with `00020101...`).
+3. Set this string in `.env`:
+```env
+QRIS_STATIC=00020101021126610014COM.GO-JEK.WWW...
+```
+
+#### C. `GOPAY_MASTER_KEY` (Session Encryption Key)
+The gateway encrypts your GoBiz credentials using **AES-256-GCM**:
+- **Automatic generation (Recommended for local dev / single VPS)**: Leave `GOPAY_MASTER_KEY=` empty in `.env`. On first run, the gateway generates `gopay.key` (chmod `0600`) automatically.
+- **Manual / Multi-instance / Docker**: Generate a 64-character hex key:
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+  Set in `.env`:
+  ```env
+  GOPAY_MASTER_KEY=your_64_character_hex_master_key
+  ```
+
+#### D. `WEBHOOK_SECRET_KEY` (Webhook Signing Secret)
+Generate a secret key to sign all outgoing webhook deliveries with `X-Webhook-Signature: sha256=<hmac>`:
+```bash
+node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
+```
+Set in `.env`:
+```env
+WEBHOOK_SECRET_KEY=whsec_your_generated_secret_key
+```
+
+#### Complete `.env` Example:
+```env
+PORT=3000
+API_KEY=4a7c8e9f1b2d3c4e5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f
+QRIS_STATIC=00020101021153033605802ID5913TEST MERCHANT6007JAKARTA63042E07
+GOPAY_MERCHANT_ID=
+GOPAY_MASTER_KEY=
+DATABASE_URL=file:data/gateway.db
+DATABASE_AUTH_TOKEN=
+WEBHOOK_SECRET_KEY=whsec_8e7f6a5b4c3d2e1f0a9b8c7d
+```
+
+---
+
+### 3. Log In to GoBiz (One-time Setup)
+Authenticate your GoBiz merchant account to generate the encrypted session:
 ```bash
 pnpm login
 ```
+1. Enter your registered GoBiz phone number (e.g. `085119772671`).
+2. Enter the 4-digit SMS OTP received.
+3. The session is encrypted with AES-256-GCM and saved to `gopay_session`.
+*(The gateway automatically auto-refreshes tokens in the background every 6 hours and on startup)*.
 
-### 4. Running in Development Mode
-```bash
-pnpm dev
-```
+---
 
-### 5. Running Tests
-```bash
-pnpm test
-```
+### 4. Running the Application
 
-### 6. Production Build & Run
-```bash
-pnpm run build
-pnpm start
-```
-
-### 7. Run Test Webhook Server (Optional)
-To test webhook delivery locally:
-```bash
-pnpm webhook:test-server
-```
-Listens on `http://localhost:4000` and logs all incoming headers, payloads, and signatures.
+- **Development mode (instant auto-reload)**:
+  ```bash
+  pnpm dev
+  ```
+- **Run automated test suite**:
+  ```bash
+  pnpm test
+  ```
+- **Production build & start**:
+  ```bash
+  pnpm run build
+  pnpm start
+  ```
+- **Run local webhook inspector server (optional)**:
+  ```bash
+  pnpm webhook:test-server
+  ```
+  Listens on `http://localhost:4000`, logs payloads, and verifies HMAC signatures.
 
 ---
 
@@ -130,13 +177,12 @@ Listens on `http://localhost:4000` and logs all incoming headers, payloads, and 
 {
   "url": "https://myshop.com/api/callbacks/gopay",
   "events": ["payment.success"],
-  "secret": "whsec_your_secret_key"
+  "secret": "whsec_custom_override_secret"
 }
 ```
 *Note: The gateway issues an initial pre-flight `webhook.ping` request to verify the destination endpoint returns a `2xx` response before storing.*
 
 ### 2. HTTP Delivery Headers
-Every webhook HTTP POST delivery includes the following headers:
 
 | Header Name | Example | Description |
 |---|---|---|
@@ -144,7 +190,7 @@ Every webhook HTTP POST delivery includes the following headers:
 | `User-Agent` | `GoPay-Merchant-Webhook/1.0` | Gateway webhook agent signature |
 | `X-Webhook-Event` | `payment.success` | Event identifier |
 | `X-Webhook-Delivery` | `evt_8f3a9b2c` | Unique delivery event ID |
-| `X-Webhook-Signature` | `sha256=1a2b3c4d...` | HMAC-SHA256 signature (included if `secret` is set) |
+| `X-Webhook-Signature` | `sha256=1a2b3c4d...` | HMAC-SHA256 signature (signed using webhook secret or `WEBHOOK_SECRET_KEY`) |
 
 ### 3. Payload Schemas
 
@@ -158,6 +204,11 @@ Triggered when a customer completes payment for a dynamic QRIS or via `/api/v1/p
   "timestamp": "2026-09-10T11:15:30.123Z",
   "data": {
     "qris_id": "hfawcihx",
+    "reference": "INV-2026-001",
+    "attributes": {
+      "customer_id": "CUST-99",
+      "email": "user@example.com"
+    },
     "transaction": {
       "transaction_id": "WTRX-123456789",
       "order_id": "ORDER-987654",
@@ -191,6 +242,8 @@ const crypto = require('crypto');
 
 function verifyWebhookSignature(payloadString, signatureHeader, secret) {
   const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(payloadString).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(signatureHeader), Buffer.from(expected));
+  const expectedBuf = Buffer.from(expected);
+  const sigBuf = Buffer.from(signatureHeader);
+  return expectedBuf.length === sigBuf.length && crypto.timingSafeEqual(expectedBuf, sigBuf);
 }
 ```

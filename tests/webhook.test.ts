@@ -6,7 +6,9 @@ import {
   clearWebhooks,
   registerWebhook,
   dispatchWebhookEvent,
-  listWebhooks
+  listWebhooks,
+  verifyWebhookSignature,
+  signWebhookPayload
 } from '../src/services/webhookService';
 import axios from 'axios';
 
@@ -19,9 +21,24 @@ describe('Webhook Service & REST API', () => {
   });
 
   beforeEach(async () => {
+    delete process.env.WEBHOOK_SECRET_KEY;
+    delete process.env.WEBHOOK_SECRET;
     await clearWebhooks();
     vi.clearAllMocks();
     process.env.API_KEY = 'test-secret-key-123';
+  });
+
+  describe('Signature Helper functions', () => {
+    it('signs and verifies payload correctly', () => {
+      const payload = JSON.stringify({ event: 'test', amount: 10000 });
+      const secret = 'super-secret-key';
+      const signature = signWebhookPayload(payload, secret);
+
+      expect(signature).toMatch(/^sha256=[a-f0-9]{64}$/);
+      expect(verifyWebhookSignature(payload, signature, secret)).toBe(true);
+      expect(verifyWebhookSignature(payload, signature, 'wrong-secret')).toBe(false);
+      expect(verifyWebhookSignature(payload + 'tampered', signature, secret)).toBe(false);
+    });
   });
 
   describe('REST Endpoints', () => {
@@ -102,24 +119,51 @@ describe('Webhook Service & REST API', () => {
     });
   });
 
-  describe('Event Dispatch & Signature', () => {
-    it('dispatches webhook event with sha256 HMAC signature', async () => {
+  describe('Event Dispatch & Signature with Global ENV secret', () => {
+    it('uses WEBHOOK_SECRET_KEY from process.env when individual webhook has no secret', async () => {
+      process.env.WEBHOOK_SECRET_KEY = 'global_env_secret_key';
       vi.mocked(axios.post).mockResolvedValue({ status: 200, data: {} });
 
-      await registerWebhook('https://merchant.example.com/hook', ['payment.success'], 'my_secret_key');
+      await registerWebhook('https://merchant.example.com/hook', ['payment.success']);
 
-      await dispatchWebhookEvent('payment.success', { amount: 50000, transaction_id: 'TRX123' });
+      await dispatchWebhookEvent('payment.success', { amount: 50000 });
 
       expect(axios.post).toHaveBeenCalledTimes(1);
       const [calledUrl, body, config] = vi.mocked(axios.post).mock.calls[0];
-
       expect(calledUrl).toBe('https://merchant.example.com/hook');
-      expect(config?.headers?.['X-Webhook-Event']).toBe('payment.success');
-      expect(config?.headers?.['X-Webhook-Signature']).toMatch(/^sha256=[a-f0-9]{64}$/);
+      expect(config?.headers?.['X-Webhook-Signature']).toBeDefined();
 
-      const parsedBody = JSON.parse(body as string);
-      expect(parsedBody.event).toBe('payment.success');
-      expect(parsedBody.data.amount).toBe(50000);
+      const isValid = verifyWebhookSignature(
+        body as string,
+        config?.headers?.['X-Webhook-Signature'],
+        'global_env_secret_key'
+      );
+      expect(isValid).toBe(true);
+    });
+
+    it('prefers registration-specific secret over global env secret', async () => {
+      process.env.WEBHOOK_SECRET_KEY = 'global_env_secret_key';
+      vi.mocked(axios.post).mockResolvedValue({ status: 200, data: {} });
+
+      await registerWebhook('https://merchant.example.com/hook', ['payment.success'], 'custom_hook_secret');
+
+      await dispatchWebhookEvent('payment.success', { amount: 50000 });
+
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      const [calledUrl, body, config] = vi.mocked(axios.post).mock.calls[0];
+      const isValidWithCustom = verifyWebhookSignature(
+        body as string,
+        config?.headers?.['X-Webhook-Signature'],
+        'custom_hook_secret'
+      );
+      const isValidWithGlobal = verifyWebhookSignature(
+        body as string,
+        config?.headers?.['X-Webhook-Signature'],
+        'global_env_secret_key'
+      );
+
+      expect(isValidWithCustom).toBe(true);
+      expect(isValidWithGlobal).toBe(false);
     });
 
     it('ignores webhooks not subscribed to the event', async () => {

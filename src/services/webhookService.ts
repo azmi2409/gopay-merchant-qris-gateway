@@ -20,6 +20,41 @@ export interface WebhookPayload {
 }
 
 /**
+ * Resolves the effective secret key for signing / verifying a webhook payload.
+ * Priority:
+ * 1. Webhook-specific secret
+ * 2. WEBHOOK_SECRET_KEY or WEBHOOK_SECRET environment variable
+ */
+export function resolveWebhookSecret(overrideSecret?: string): string | undefined {
+  return overrideSecret || process.env.WEBHOOK_SECRET_KEY || process.env.WEBHOOK_SECRET || undefined;
+}
+
+/**
+ * Computes an HMAC-SHA256 signature for a payload body.
+ */
+export function signWebhookPayload(body: string, secret: string): string {
+  return 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
+}
+
+/**
+ * Validates an HMAC-SHA256 signature against a payload using timing-safe comparison.
+ */
+export function verifyWebhookSignature(body: string, signatureHeader: string, secret: string): boolean {
+  if (!signatureHeader || !secret) return false;
+  const expected = signWebhookPayload(body, secret);
+  try {
+    const expectedBuffer = Buffer.from(expected);
+    const signatureBuffer = Buffer.from(signatureHeader);
+    return (
+      expectedBuffer.length === signatureBuffer.length &&
+      crypto.timingSafeEqual(expectedBuffer, signatureBuffer)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pings the target webhook URL with a verification ping.
  * Returns true if the endpoint returns a 2xx HTTP status.
  */
@@ -31,6 +66,8 @@ export async function pingWebhookUrl(url: string, secret?: string): Promise<bool
     data: { message: 'Webhook verification ping' }
   };
   const body = JSON.stringify(pingPayload);
+  const effectiveSecret = resolveWebhookSecret(secret);
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': 'GoPay-Merchant-Webhook/1.0',
@@ -38,9 +75,8 @@ export async function pingWebhookUrl(url: string, secret?: string): Promise<bool
     'X-Webhook-Delivery': pingPayload.id
   };
 
-  if (secret) {
-    const hmac = crypto.createHmac('sha256', secret).update(body).digest('hex');
-    headers['X-Webhook-Signature'] = `sha256=${hmac}`;
+  if (effectiveSecret) {
+    headers['X-Webhook-Signature'] = signWebhookPayload(body, effectiveSecret);
   }
 
   const response = await axios.post(url, body, {
@@ -121,6 +157,8 @@ export async function dispatchWebhookEvent(event: string, data: unknown): Promis
   const body = JSON.stringify(payload);
 
   for (const wh of matching) {
+    const effectiveSecret = resolveWebhookSecret(wh.secret);
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'User-Agent': 'GoPay-Merchant-Webhook/1.0',
@@ -128,9 +166,8 @@ export async function dispatchWebhookEvent(event: string, data: unknown): Promis
       'X-Webhook-Delivery': payload.id
     };
 
-    if (wh.secret) {
-      const hmac = crypto.createHmac('sha256', wh.secret).update(body).digest('hex');
-      headers['X-Webhook-Signature'] = `sha256=${hmac}`;
+    if (effectiveSecret) {
+      headers['X-Webhook-Signature'] = signWebhookPayload(body, effectiveSecret);
     }
 
     withRetry(
