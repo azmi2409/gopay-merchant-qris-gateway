@@ -9,6 +9,7 @@ import {
 } from '../services/paymentService';
 import { withRetry } from '../utils/retry';
 import { FormattedTransaction, GoPayTransactionsResponse } from '../types/gopay';
+import { getMerchantId } from '../services/settingsService';
 
 export const transactionRouter: Router = Router();
 
@@ -20,7 +21,7 @@ transactionRouter.get('/api/v1/transactions', apiKeyAuth, async (req: Request, r
   if (!headers) {
     res.status(400).json({
       success: false,
-      error: 'GoPay session not available. Please run `npm run login` in the terminal.'
+      error: 'GoPay session not available. Configure it in the admin panel.'
     });
     return;
   }
@@ -29,7 +30,7 @@ transactionRouter.get('/api/v1/transactions', apiKeyAuth, async (req: Request, r
     const fetchTransactions = async (activeHeaders: Record<string, string>) => {
       const merchantId =
         (req.headers['x-gopay-merchant-id'] as string) ||
-        process.env.GOPAY_MERCHANT_ID ||
+        await getMerchantId() ||
         '';
       const now = new Date();
       const startTimeISO = req.query.startTime
@@ -148,9 +149,7 @@ transactionRouter.post('/api/v1/payments/verify', apiKeyAuth, async (req: Reques
       message: 'Payment not found or already claimed'
     });
   } catch (err: any) {
-    const errorDetail = err.response
-      ? `HTTP ${err.response.status}: ${JSON.stringify(err.response.data)}`
-      : err.message;
+    const errorDetail = err.response ? `HTTP ${err.response.status}` : err.message;
     logActivity('ERROR', `Failed to verify payment: ${errorDetail}`);
     res.status(500).json({
       success: false,
@@ -168,14 +167,14 @@ transactionRouter.get('/api/v1/session/status', apiKeyAuth, async (req: Request,
       success: false,
       data: {
         token_status: 'invalid',
-        message: 'Session not configured. Run `npm run login` in the terminal.'
+        message: 'Session not configured. Complete setup in the admin panel.'
       }
     });
     return;
   }
 
   try {
-    const merchantId = process.env.GOPAY_MERCHANT_ID || '';
+    const merchantId = await getMerchantId() || '';
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 3600 * 1000).toISOString();
 

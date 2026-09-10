@@ -7,12 +7,14 @@ import { cleanExpiredTransactions, logActivity } from './services/paymentService
 import { ensureSessionReady } from './services/startupService';
 import { logger } from './utils/logger';
 import { initDatabase, closeDatabase } from './utils/db';
+import { createInternalApp } from './internalApp';
 
 const PORT = process.env.PORT || 3000;
 
 let cleanupTimer: NodeJS.Timeout | null = null;
 let refreshTimer: NodeJS.Timeout | null = null;
 let serverInstance: ReturnType<typeof app.listen> | null = null;
+let internalServerInstance: ReturnType<typeof app.listen> | null = null;
 
 // Periodic cleanup of claimed transactions (every hour)
 function startMaintenanceTimers(): void {
@@ -50,9 +52,8 @@ function shutdown(): void {
   if (refreshTimer) clearInterval(refreshTimer);
   closeDatabase();
   if (serverInstance) {
-    serverInstance.close(() => {
-      process.exit(0);
-    });
+    serverInstance.close();
+    internalServerInstance?.close(() => process.exit(0));
   } else {
     process.exit(0);
   }
@@ -65,7 +66,7 @@ async function start(): Promise<void> {
   // Initialize database schema
   await initDatabase();
 
-  // Check session, prompt to login if missing, or refresh if expired
+  // Keep the API available for browser setup when no session exists.
   await ensureSessionReady();
 
   startMaintenanceTimers();
@@ -73,6 +74,13 @@ async function start(): Promise<void> {
   serverInstance = app.listen(PORT, () => {
     logActivity('SYSTEM', `GoPay Partner Gateway running on port ${PORT}`);
   });
+  internalServerInstance = createInternalApp().listen(
+    Number(process.env.INTERNAL_PORT || 3001),
+    process.env.INTERNAL_HOST || '127.0.0.1',
+    () => {
+      logActivity('SYSTEM', 'Private admin API ready');
+    }
+  );
 }
 
 start().catch((err) => {

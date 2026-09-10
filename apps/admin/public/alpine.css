@@ -1,0 +1,29 @@
+[x-cloak] {
+  display: none !important;
+}
+
+.nav:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.generator-grid { align-items: start; }
+.qris-result { text-align: center; }
+.generated-qr { width: min(320px, 100%); aspect-ratio: 1; background: #fff; padding: 12px; margin: 8px auto 20px; }
+.qris-result dl { display: grid; gap: 8px; text-align: left; }
+.qris-result dl div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 10px 0; }
+.qris-result dt { color: var(--muted); }
+.qris-result dd { margin: 0; overflow-wrap: anywhere; }
+.result-actions { display: flex; gap: 10px; margin-top: 20px; }
+.action { flex: 1; text-decoration: none; text-align: center; padding: 12px; background: var(--lime); color: #151a12; font-weight: 800; }
+.action.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.webhook-panel { grid-column: 1 / -1; }
+.webhook-list { margin-top: 20px; }
+.webhook { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.webhook strong, .webhook span { display: block; overflow-wrap: anywhere; }
+.webhook span { color: var(--muted); font-size: .75rem; margin-top: 5px; }
+.remove-webhook { border: 1px solid #633; background: transparent; color: var(--red); padding: 8px 10px; }
+
+@media (max-width: 480px) {
+  .result-actions, .webhook { align-items: stretch; flex-direction: column; }
+}

@@ -95,7 +95,8 @@ describe('Webhook Service & REST API', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.id).toMatch(/^whk_/);
       expect(res.body.data.url).toBe('https://myshop.com/callbacks/gopay');
-      expect(res.body.data.secret).toBe('whsec_test123');
+      expect(res.body.data.secret).toBeUndefined();
+      expect(res.body.data.has_secret).toBe(true);
 
       // Check ping call
       expect(axios.post).toHaveBeenCalledTimes(1);
@@ -109,6 +110,8 @@ describe('Webhook Service & REST API', () => {
         .set('x-api-key', 'test-secret-key-123');
       expect(listRes.status).toBe(200);
       expect(listRes.body.data.length).toBe(1);
+      expect(listRes.body.data[0].secret).toBeUndefined();
+      expect(listRes.body.data[0].has_secret).toBe(true);
 
       // Delete webhook
       const deleteRes = await request(app)

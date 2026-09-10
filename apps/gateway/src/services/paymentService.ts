@@ -4,6 +4,7 @@ import { logger } from '../utils/logger';
 import { withRetry } from '../utils/retry';
 import { dispatchWebhookEvent } from './webhookService';
 import { getDatabase } from '../utils/db';
+import { getMerchantId } from './settingsService';
 import {
   ActivityLog,
   ClaimedTransactionRecord,
@@ -35,6 +36,10 @@ export function logActivity(
     activityLogs.pop();
   }
   logger.log(type, message, details);
+  getDatabase().execute({
+    sql: 'INSERT INTO activity_logs (timestamp, type, message) VALUES (?, ?, ?)',
+    args: [timestamp, type, message]
+  }).catch((error: any) => logger.debug(`[ActivityLog] Persistence skipped: ${error.message}`));
 }
 
 // ── DB Helpers for QRIS ──
@@ -94,14 +99,6 @@ export async function updateQRISStatus(
   await db.execute({
     sql: `UPDATE qris SET status = ?, transaction_json = ? WHERE id = ?`,
     args: [status, transaction ? JSON.stringify(transaction) : null, id]
-  });
-}
-
-export async function deleteQRISRecord(id: string): Promise<void> {
-  const db = getDatabase();
-  await db.execute({
-    sql: `DELETE FROM qris WHERE id = ?`,
-    args: [id]
   });
 }
 
@@ -232,11 +229,11 @@ export async function verifyPayment(
 ): Promise<VerifiedPayment | null> {
   let headers = await sessionManager.getValidHeaders(userAgent);
   if (!headers) {
-    throw new Error('GoPay session not found. Please log in via `npm run login`.');
+    throw new Error('GoPay session not found. Configure it in the admin panel.');
   }
 
   const fetchCheckPayment = async (activeHeaders: Record<string, string>) => {
-    const merchantId = merchantIdOverride || process.env.GOPAY_MERCHANT_ID || '';
+    const merchantId = merchantIdOverride || await getMerchantId() || '';
     const now = new Date();
     const startTimeDate = startTime
       ? new Date(startTime)

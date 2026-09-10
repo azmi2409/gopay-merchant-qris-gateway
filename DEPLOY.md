@@ -20,12 +20,19 @@ Configure your `.env` file with the following keys before starting in production
 ```env
 NODE_ENV=production
 PORT=3000
+INTERNAL_PORT=3001
+INTERNAL_HOST=127.0.0.1
+ADMIN_PORT=3100
+ADMIN_PASSWORD=generate_a_strong_password_here
+ADMIN_SESSION_SECRET=generate_an_independent_32_byte_secret_here
+ADMIN_API_KEY=generate_a_second_independent_32_byte_secret_here
+GATEWAY_INTERNAL_URL=http://127.0.0.1:3001
 
 # Required: API key for authenticating private routes
 API_KEY=generate_a_strong_random_secret_here
 
-# Required: Static QRIS payload string from GoBiz merchant dashboard
-QRIS_STATIC=00020101021126610014COM.GO-JEK.WWW...
+# Optional fallback: normally configured from the admin panel
+QRIS_STATIC=
 
 # Optional: Merchant ID (auto-extracted from login session if omitted)
 GOPAY_MERCHANT_ID=
@@ -43,18 +50,9 @@ DATABASE_AUTH_TOKEN=
 
 ---
 
-## 3. Initial Session Login
+## 3. Initial Browser Setup
 
-Before running in an automated background daemon, run the interactive OTP login once to generate the encrypted `gopay_session` and master key:
-
-```bash
-pnpm install
-pnpm login
-```
-
-- Enter your GoBiz merchant phone number.
-- Input the 4-digit SMS OTP.
-- Verifies and saves the encrypted session to `gopay_session` and `gopay.key`.
+Start both processes, open `/admin/` on the admin service, then configure the static QRIS and complete GoBiz OTP authentication. Port `3001` is the private management plane and must never be published through a reverse proxy or host firewall.
 
 ---
 
@@ -68,7 +66,8 @@ npm install -g pm2
 ### Step 2: Build & Start
 ```bash
 pnpm build
-pm2 start dist/server.js --name gopay-gateway --time
+pm2 start apps/gateway/dist/server.js --name gopay-gateway --time
+pm2 start apps/admin/dist/server.js --name gopay-admin --time
 pm2 save
 pm2 startup
 ```
@@ -89,6 +88,10 @@ Add to `/etc/caddy/Caddyfile`:
 pay.yourdomain.com {
     reverse_proxy 127.0.0.1:3000
 }
+
+admin.yourdomain.com {
+    reverse_proxy 127.0.0.1:3100
+}
 ```
 
 Reload Caddy:
@@ -102,11 +105,11 @@ sudo systemctl reload caddy
 ## 5. Docker & Docker Compose Deployment
 
 ### Docker Multi-Stage Build (Node 24 LTS)
-The root `Dockerfile` uses `node:24-alpine` for a lightweight (<150MB) container.
+`apps/gateway/Dockerfile` uses `node:24-alpine` for the gateway container.
 
 ```bash
 # Build image
-docker build -t gopay-merchant-gateway:latest .
+docker build -f apps/gateway/Dockerfile -t gopay-merchant-gateway:latest .
 
 # Run container with mounted session & persistent DB
 docker run -d \
@@ -132,7 +135,7 @@ services:
   gateway:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: apps/gateway/Dockerfile
     container_name: gopay-gateway
     restart: unless-stopped
     ports:
@@ -156,6 +159,8 @@ Start the service:
 ```bash
 docker compose up -d
 ```
+
+Compose stores gateway data in the managed `gateway-data` named volume. Back up that volume before upgrades or host migration.
 
 ---
 

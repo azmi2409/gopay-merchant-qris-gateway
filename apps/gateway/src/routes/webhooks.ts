@@ -34,7 +34,7 @@ webhookRouter.post('/api/v1/webhooks', apiKeyAuth, async (req: Request, res: Res
     return;
   }
 
-  const registered = await registerWebhook(
+  const { secret: registeredSecret, ...registered } = await registerWebhook(
     url,
     Array.isArray(events) ? events : ['payment.success'],
     secret
@@ -42,7 +42,7 @@ webhookRouter.post('/api/v1/webhooks', apiKeyAuth, async (req: Request, res: Res
 
   res.status(201).json({
     success: true,
-    data: registered
+    data: { ...registered, has_secret: Boolean(registeredSecret) }
   });
 });
 
@@ -51,7 +51,7 @@ webhookRouter.get('/api/v1/webhooks', apiKeyAuth, async (_req: Request, res: Res
   const hooks = await listWebhooks();
   res.json({
     success: true,
-    data: hooks
+    data: hooks.map(({ secret, ...hook }) => ({ ...hook, has_secret: Boolean(secret) }))
   });
 });
 

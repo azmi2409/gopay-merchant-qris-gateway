@@ -1,6 +1,6 @@
 # Gojek / GoBiz API Specification & Gateway Architecture
 
-Technical specifications for internal Gojek / GoBiz APIs integrated by this gateway microservice (`src/login.ts`, `src/services/sessionManager.ts`, and `src/server.ts`), covering OTP authentication, AES-256-GCM session lifecycle, automatic token refresh, and RESTful transaction verification with retry backoff.
+Technical specifications for internal Gojek / GoBiz APIs integrated by this gateway (`apps/admin`, `apps/gateway/src/services/adminService.ts`, and `apps/gateway/src/services/sessionManager.ts`), covering browser-based OTP authentication, AES-256-GCM session lifecycle, automatic token refresh, and RESTful transaction verification with retry backoff.
 
 ---
 
@@ -26,9 +26,9 @@ The gateway authenticates through **GoID (GoBiz Web Dashboard)**. The active ses
 
 ```
 +--------------------+      +-------------------------+      +-------------------------+
-|    pnpm login      | ---> | src/services/           | <--- | src/server.ts           |
-|  (Interactive CLI  |      | sessionManager.ts       |      | (Express REST v1        |
-|    OTP Login)      |      | (AES-256-GCM Storage)   |      |  Gateway + QRIS Engine) |
+| apps/admin         | ---> | src/services/           | <--- | src/server.ts           |
+| (Isolated Web UI)  |      | sessionManager.ts       |      | (Express REST v1        |
+|                    |      | (AES-256-GCM Storage)   |      |  Gateway + QRIS Engine) |
 +--------------------+      +-------------------------+      +-------------------------+
           |                              |                                |
           v                              v                                v
@@ -67,36 +67,33 @@ The gateway authenticates through **GoID (GoBiz Web Dashboard)**. The active ses
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Merchant (Terminal)
-    participant CLI as src/login.ts (CLI)
+    actor User as Merchant (Browser)
+    participant Admin as Isolated Admin Service
     participant SM as sessionManager.ts
     participant GoID as api.gobiz.co.id (/goid)
     participant GoResto as api.gobiz.co.id (/goresto)
 
-    User->>CLI: Run `pnpm login`
-    CLI->>User: Prompt phone number (e.g. 085119772671)
-    User->>CLI: Input phone number
-    Note over CLI: Normalize phone: strip nondigits and leading 0/62 -> "85119772671"
+    User->>Admin: Enter phone number
+    Note over Admin: Normalize phone: strip nondigits and leading 0/62
     
-    CLI->>GoID: POST /goid/login/request<br/>{ client_id: "go-biz-web-new", phone_number, country_code: "62" }
+    Admin->>GoID: POST /goid/login/request<br/>{ client_id: "go-biz-web-new", phone_number, country_code: "62" }
     GoID-->>User: Send SMS OTP (4 digits)
-    GoID-->>CLI: Response { otp_token: "...", expires_in: 720 }
+    GoID-->>Admin: Response { otp_token: "...", expires_in: 720 }
     
-    CLI->>User: Display SMS sent notification and prompt for OTP
-    User->>CLI: Input 4-digit OTP
+    Admin->>User: Prompt for SMS OTP
+    User->>Admin: Enter OTP
     
-    CLI->>GoID: POST /goid/token (grant_type: "otp")<br/>{ otp: "1234", otp_token: "..." }
-    GoID-->>CLI: Response { access_token, refresh_token, expires_in: 86400 }
+    Admin->>GoID: POST /goid/token (grant_type: "otp")<br/>{ otp, otp_token }
+    GoID-->>Admin: Response { access_token, refresh_token, expires_in }
     
-    CLI->>GoResto: GET /goresto/v5/public/users/config<br/>Headers: Authorization: Bearer <access_token>
-    GoResto-->>CLI: Response { merchant: { id, name }, merchants: [...], restaurants: [...] }
-    Note over CLI: Extract merchant_id & outlet name
+    Admin->>GoResto: GET /goresto/v5/public/users/config<br/>Headers: Authorization: Bearer <access_token>
+    GoResto-->>Admin: Response { merchant: { id, name }, merchants: [...], restaurants: [...] }
+    Note over Admin: Extract merchant_id & outlet name
     
-    CLI->>SM: saveSession({ phone_number, merchant_id, outlet_name, access_token, refresh_token, expires_at })
+    Admin->>SM: saveSession({ phone_number, merchant_id, outlet_name, access_token, refresh_token, expires_at })
     SM-->>SM: Encrypt with AES-256-GCM and write to `gopay_session`
-    SM-->>CLI: Session saved successfully
-    
-    CLI->>User: Display success banner and session details
+    SM-->>Admin: Session saved successfully
+    Admin->>User: Display connected status without credentials
 ```
 
 ---
@@ -111,7 +108,7 @@ flowchart TD
     B --> C["loadSession() decrypts gopay_session"]
     
     C --> D{"Session & access_token exist?"}
-    D -- No --> E["Return null -> Response 400: Run pnpm login"]
+    D -- No --> E["Return null -> Prompt admin reconnection"]
     D -- Yes --> F{"isExpired(session)?<br/>now >= expires_at - 5 minutes"}
     
     F -- Valid --> G["Construct Bearer Auth Headers & Cookies"]
