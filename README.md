@@ -39,14 +39,14 @@ GoPay Merchant & Dynamic QRIS Payment Gateway monorepo with an isolated web admi
 ## Project Structure
 
 ```
-apps/admin/            # Separate Express admin service and native web UI
+apps/admin/            # Separate SvelteKit 2 + Tailwind CSS admin control plane
 apps/gateway/          # Payment API, customer page, management API, and tests
 docker-compose.yml     # Isolated gateway and admin containers
 ```
 
 The public gateway listens on `PORT` (`3000`). Its management API listens separately on `INTERNAL_PORT` (`3001`) and defaults to loopback only. The admin service listens on `ADMIN_PORT` (`3100`) and calls the management listener server-to-server using `ADMIN_API_KEY`. Never expose port `3001` publicly.
 
-Docker Compose persists SQLite data in the managed `gateway-data` named volume. The admin interface uses the self-hosted CSP-compatible Alpine.js runtime; no frontend CDN is required.
+Docker Compose persists SQLite data in the managed `gateway-data` named volume. The admin interface runs as a standalone SvelteKit node service built with Tailwind CSS v4; no external CDN dependencies are required.
 
 ---
 
