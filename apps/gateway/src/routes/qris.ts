@@ -9,6 +9,7 @@ import {
   verifyPayment
 } from '../services/paymentService';
 import { createQris, QrisCreationError } from '../services/qrisService';
+import * as sessionManager from '../services/sessionManager';
 
 export const qrisRouter: Router = Router();
 
@@ -55,6 +56,9 @@ qrisRouter.get('/api/v1/qris/:id', async (req: Request, res: Response) => {
     qris.data
   )}`;
 
+  const session = await sessionManager.loadSessionAsync();
+  const verificationMode = session?.access_token ? 'auto' : 'manual';
+
   res.json({
     success: true,
     data: {
@@ -71,6 +75,7 @@ qrisRouter.get('/api/v1/qris/:id', async (req: Request, res: Response) => {
       duration_ms: QRIS_EXPIRY_MS,
       created_at: qris.createdAt.toISOString(),
       status: qris.status,
+      verification_mode: verificationMode,
       transaction: qris.transaction || null
     }
   });
@@ -104,6 +109,20 @@ qrisRouter.get('/api/v1/qris/:id/status', async (req: Request, res: Response) =>
       paid: false,
       status: 'EXPIRED',
       message: 'QRIS has expired'
+    });
+    return;
+  }
+
+  const session = await sessionManager.loadSessionAsync();
+  if (!session?.access_token) {
+    res.json({
+      success: true,
+      paid: false,
+      status: 'PENDING',
+      verification_mode: 'manual',
+      reference: qris.reference,
+      attributes: qris.attributes,
+      message: 'Automatic verification not enabled. Confirm manually with merchant.'
     });
     return;
   }

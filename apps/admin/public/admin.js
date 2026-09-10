@@ -29,16 +29,28 @@ function renderDashboard(data, panel){
   const max=Math.max(...data.daily.map((row)=>Number(row.amount)),1);
   $('#chart').innerHTML=data.daily.length?data.daily.map((row)=>`<div class="bar h${Math.max(0,Math.ceil(Number(row.amount)/max*10))}" title="${escapeHtml(row.day)}: ${money(row.amount)}"></div>`).join(''):'<p class="muted">No paid activity in this range.</p>';
   $('#chart-caption').textContent=`Last ${data.range_days} days`;
-  const checks=[['Static QRIS',data.setup.qris_configured],['Merchant ID',data.setup.merchant_id_configured],['GoBiz session',data.setup.session_configured]];
-  $('#readiness').innerHTML=checks.map(([label,ready])=>`<div class="check"><span>${label}</span><b>${ready?'Ready':'Action needed'}</b></div>`).join('');
-  $('#transactions').innerHTML=data.recent.map((row)=>`<tr><td><code>${escapeHtml(row.trx_id||row.id)}</code></td><td>${escapeHtml(row.reference||'-')}</td><td><span class="badge ${escapeHtml(row.status)}">${escapeHtml(row.status)}</span></td><td>${money(row.amount)}</td><td>${new Date(String(row.created_at)).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No QRIS records yet.</td></tr>';
-  const required=[['Static QRIS',data.setup.qris_configured],['GoBiz account',data.setup.session_configured]];
-  const complete=required.filter(([,ready])=>ready).length;
-  $('#onboarding-progress').innerHTML=required.map(([label,ready],index)=>`<div class="progress-step ${ready?'done':''}"><span>${ready?'OK':String(index+1).padStart(2,'0')}</span><b>${label}</b></div>`).join('');
-  panel.onboarding=complete<required.length;
-  panel.ready=!panel.onboarding;
-  panel.connection=panel.ready?'Gateway ready':`Setup ${complete}/${required.length}`;
-  if(panel.onboarding&&!panel.onboardingChecked)panel.setView('setup');
+  const checks=[
+    ['Static QRIS (Wajib)', data.setup.qris_configured],
+    ['GoBiz Account (Opsional)', data.setup.session_configured],
+    ['Mode Verifikasi', data.setup.mode === 'full' ? 'Otomatis' : (data.setup.mode === 'generation_only' ? 'Manual' : 'Belum Lengkap')]
+  ];
+  $('#readiness').innerHTML=checks.map(([label,val])=>`<div class="check"><span>${label}</span><b>${typeof val === 'boolean' ? (val ? 'Ready' : 'Pending') : val}</b></div>`).join('');
+  $('#transactions').innerHTML=data.recent.map((row)=>`<tr><td><code>${escapeHtml(row.trx_id||row.id)}</code></td><td>${escapeHtml(row.reference||'-')}</td><td><span class="badge ${escapeHtml(row.status)}">${escapeHtml(row.status)}</span></td><td>${money(row.amount)}</td><td>${new Date(String(row.created_at)).toLocaleString()}</td><td>${row.status === 'PENDING' ? `<button class="btn-mark-paid small" data-id="${escapeHtml(row.id)}">Tandai Lunas</button>` : '-'}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">No QRIS records yet.</td></tr>';
+  document.querySelectorAll('.btn-mark-paid').forEach(btn => btn.addEventListener('click', () => panel.markAsPaid(btn.dataset.id)));
+  
+  // Only static QRIS is strictly required to unblock onboarding
+  const qrisReady = Boolean(data.setup.qris_configured);
+  panel.onboarding = !qrisReady;
+  panel.ready = qrisReady;
+  panel.connection = data.setup.mode === 'full' ? 'Gateway Ready (Auto)' : (data.setup.mode === 'generation_only' ? 'Gateway Ready (Manual)' : 'Setup Needed');
+  
+  const steps = [
+    ['Static QRIS (Wajib)', qrisReady],
+    ['GoBiz Auto-Check (Opsional)', Boolean(data.setup.session_configured)]
+  ];
+  $('#onboarding-progress').innerHTML=steps.map(([label,ready],index)=>`<div class="progress-step ${ready?'done':''}"><span>${ready?'OK':String(index+1).padStart(2,'0')}</span><b>${label}</b></div>`).join('');
+  
+  if(panel.onboarding && !panel.onboardingChecked) panel.setView('setup');
   panel.onboardingChecked=true;
 }
 async function loadLogs(){try{const logs=await api('/logs');$('#log-list').innerHTML=logs.map((log)=>`<div class="log"><time>${new Date(String(log.timestamp)).toLocaleString()}</time><strong class="${escapeHtml(log.type)}">${escapeHtml(log.type)}</strong><span>${escapeHtml(log.message)}</span></div>`).join('')||'<p class="muted">No activity logged yet.</p>'}catch(error){$('#log-list').textContent=error.message}}
@@ -91,6 +103,7 @@ document.addEventListener('alpine:init',()=>{
     async requestOtp(){try{const result=await api('/setup/otp',{method:'POST',body:JSON.stringify({phone:this.phone})});this.otpMessage=`OTP sent. Expires in ${result?.expires_in||720} seconds.`;this.otpRequested=true}catch(error){this.otpMessage=error.message}},
     async verifyOtp(){try{await api('/setup/verify',{method:'POST',body:JSON.stringify({otp:this.otp})});this.verifyMessage='GoBiz account connected.';this.otp='';await this.loadDashboard()}catch(error){this.verifyMessage=error.message}},
     async registerWebhook(){try{await api('/webhooks',{method:'POST',body:JSON.stringify({url:this.webhookUrl,secret:this.webhookSecret,events:['payment.success']})});this.webhookMessage='Webhook verified and registered.';this.webhookUrl='';this.webhookSecret='';await this.loadWebhooks()}catch(error){this.webhookMessage=error.message}},
-    async removeWebhook(id){try{await api(`/webhooks/${encodeURIComponent(id)}`,{method:'DELETE'});this.webhookMessage='Webhook removed.';await this.loadWebhooks()}catch(error){this.webhookMessage=error.message}}
+    async removeWebhook(id){try{await api(`/webhooks/${encodeURIComponent(id)}`,{method:'DELETE'});this.webhookMessage='Webhook removed.';await this.loadWebhooks()}catch(error){this.webhookMessage=error.message}},
+    async markAsPaid(id){if(!confirm('Tandai transaksi ini sebagai Lunas secara manual?'))return;try{await api(`/qris/${encodeURIComponent(id)}/mark-paid`,{method:'POST'});await this.loadDashboard()}catch(error){alert('Gagal menandai lunas: '+error.message)}}
   }))
 });

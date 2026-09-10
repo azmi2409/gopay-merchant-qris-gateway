@@ -204,7 +204,10 @@ export async function getDashboardData(days: number): Promise<Record<string, unk
       merchant_id_configured: Boolean(settings.merchantId || process.env.GOPAY_MERCHANT_ID),
       session_configured: Boolean(session?.access_token),
       session_expires_at: session?.expires_at || null,
-      outlet_name: session?.outlet_name || null
+      outlet_name: session?.outlet_name || null,
+      mode: (settings.qrisStatic || process.env.QRIS_STATIC)
+        ? (session?.access_token ? 'full' : 'generation_only')
+        : 'unconfigured'
     }
   };
 }

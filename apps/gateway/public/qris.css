@@ -137,6 +137,21 @@ h1 { margin: 0; }
 .button-secondary { border: 1px solid #dfe3e8; background: #fff; color: #4e5965; }
 .button-secondary:hover:not(:disabled) { border-color: #aeb6bf; background: #f8f9fa; }
 .merchant-return { margin-top: 8px; }
+.manual-notice {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 10px;
+    margin: 10px 0 14px;
+    text-align: left;
+    font-size: 12px;
+    color: #166534;
+}
+.manual-notice strong { display: block; font-weight: 700; margin-bottom: 2px; }
+.manual-notice p { margin: 0; color: #15803d; line-height: 1.4; }
 .payment-status { margin-top: 24px; padding-top: 24px; border-top: 1px solid #e6e9ed; }
 .timer-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .timer-label { display: flex; align-items: center; gap: 8px; color: #66717c; font-size: 13px; font-weight: 600; }

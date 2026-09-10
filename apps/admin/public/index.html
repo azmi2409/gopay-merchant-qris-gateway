@@ -41,7 +41,7 @@
           <article class="panel"><div class="panel-title"><h3>Paid volume</h3><span id="chart-caption"></span></div><div id="chart" class="chart"></div></article>
           <article class="panel"><h3>Gateway readiness</h3><div id="readiness" class="checklist"></div></article>
         </div>
-        <article class="panel"><div class="panel-title"><h3>Recent QRIS</h3><span>Latest 20 records</span></div><div class="table-wrap"><table><thead><tr><th>Transaction</th><th>Reference</th><th>Status</th><th>Amount</th><th>Created</th></tr></thead><tbody id="transactions"></tbody></table></div></article>
+        <article class="panel"><div class="panel-title"><h3>Recent QRIS</h3><span>Latest 20 records</span></div><div class="table-wrap"><table><thead><tr><th>Transaction</th><th>Reference</th><th>Status</th><th>Amount</th><th>Created</th><th>Action</th></tr></thead><tbody id="transactions"></tbody></table></div></article>
       </section>
 
       <section id="generate" class="view" x-show="view === 'generate'">
@@ -66,7 +66,7 @@
 
       <section id="setup" class="view" x-show="view === 'setup'">
         <article id="onboarding" class="onboarding" x-show="onboarding">
-          <div><p class="eyebrow">FIRST-TIME SETUP</p><h2>Make the gateway ready</h2><p class="muted">Complete both required steps. You can return here later to replace the QRIS or reconnect GoBiz.</p></div>
+          <div><p class="eyebrow">FIRST-TIME SETUP</p><h2>Make the gateway ready</h2><p class="muted">Upload static QRIS to enable payments. Connecting GoBiz is optional for automatic settlement checks.</p></div>
           <div id="onboarding-progress" class="progress" aria-label="Setup progress"></div>
         </article>
         <div class="grid-two setup-grid">

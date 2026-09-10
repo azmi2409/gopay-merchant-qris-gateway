@@ -118,4 +118,21 @@ describe('admin web service', () => {
       'x-admin-api-key': 'synthetic-service-secret-at-least-32-characters'
     });
   });
+
+  it('proxies mark-as-paid request to internal gateway API', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true, data: { status: 'PAID' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+    const agent = request.agent(createAdminApp());
+    await agent.post('/admin/api/login').send({ password: 'synthetic-admin-password' });
+    const response = await agent.post('/admin/api/qris/testqris/mark-paid');
+    expect(response.status).toBe(200);
+    expect(fetchMock.mock.calls[0][0]).toContain('/internal/admin/qris/testqris/mark-paid');
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
+      'x-admin-api-key': 'synthetic-service-secret-at-least-32-characters'
+    });
+  });
 });

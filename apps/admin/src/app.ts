@@ -188,6 +188,16 @@ export function createAdminApp(): Express {
       res.status(gatewayError?.status || 502).json({ success: false, message: error.message });
     }
   });
+  app.post('/admin/api/qris/:id/mark-paid', requireSession, async (req, res) => {
+    try {
+      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const data = await gateway(`/internal/admin/qris/${encodeURIComponent(String(id))}/mark-paid`, { method: 'POST' });
+      res.json({ success: true, data });
+    } catch (error: any) {
+      const gatewayError = error instanceof GatewayError ? error : null;
+      res.status(gatewayError?.status || 502).json({ success: false, message: error.message });
+    }
+  });
   app.get('/admin/api/settings', requireSession, async (_req, res) => {
     try {
       res.json({ success: true, data: await gateway('/internal/admin/settings') });
