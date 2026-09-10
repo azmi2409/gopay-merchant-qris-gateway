@@ -2,6 +2,7 @@ import { QRISRecord } from '../types/payment';
 import { generateDynamicQRIS } from '../utils/qris';
 import { getQrisStatic } from './settingsService';
 import { logActivity, QRIS_EXPIRY_MS, saveQRISRecord } from './paymentService';
+import * as sessionManager from './sessionManager';
 
 export class QrisCreationError extends Error {
   constructor(message: string, readonly status: number) {
@@ -60,6 +61,9 @@ export async function createQris(input: CreateQrisInput, publicBaseUrl: string) 
   await saveQRISRecord(record);
   logActivity('INFO', `Dynamic QRIS created | TRX-ID: ${trxId} | Amount: Rp ${amount}`);
 
+  const session = await sessionManager.loadSessionAsync();
+  const verificationMode = session?.access_token ? 'auto' : 'manual';
+
   return {
     qris_id: qrisId,
     trx_id: trxId,
@@ -70,6 +74,7 @@ export async function createQris(input: CreateQrisInput, publicBaseUrl: string) 
     qris_code: dynamicCode,
     amount,
     expires_at: expiresAt.toISOString(),
-    expires_in: '5 minutes'
+    expires_in: '5 minutes',
+    verification_mode: verificationMode
   };
 }

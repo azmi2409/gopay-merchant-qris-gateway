@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import axios from 'axios';
+import { app as publicApp } from '../src/app';
 import { createInternalApp } from '../src/internalApp';
 import { getDatabase, initDatabase } from '../src/utils/db';
 
@@ -136,5 +137,26 @@ describe('private admin API', () => {
     expect(verify.status).toBe(200);
     expect(post.mock.calls[0][2]?.headers['x-uniqueid']).toBe(otp.body.data.deviceId);
     expect(post.mock.calls[1][2]?.headers['x-uniqueid']).toBe(otp.body.data.deviceId);
+  });
+
+  it('manually marks a pending QRIS as paid', async () => {
+    const auth = { 'x-admin-api-key': process.env.ADMIN_API_KEY };
+    const create = await request(app)
+      .post('/internal/admin/qris')
+      .set(auth)
+      .send({ amount: 15000, reference: 'MANUAL-TEST' });
+    expect(create.status).toBe(201);
+    const qrisId = create.body.data.qris_id;
+
+    const mark = await request(app)
+      .post(`/internal/admin/qris/${qrisId}/mark-paid`)
+      .set(auth);
+    expect(mark.status).toBe(200);
+    expect(mark.body.data.status).toBe('PAID');
+
+    const statusCheck = await request(publicApp).get(`/api/v1/qris/${qrisId}/status`);
+    expect(statusCheck.status).toBe(200);
+    expect(statusCheck.body.paid).toBe(true);
+    expect(statusCheck.body.status).toBe('PAID');
   });
 });

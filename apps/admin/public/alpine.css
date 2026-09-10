@@ -24,6 +24,18 @@
 .webhook span { color: var(--muted); font-size: .75rem; margin-top: 5px; }
 .remove-webhook { border: 1px solid #633; background: transparent; color: var(--red); padding: 8px 10px; }
 
+.btn-mark-paid {
+  border: 1px solid #275d4b;
+  background: transparent;
+  color: var(--mint);
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  border-radius: 4px;
+}
+.btn-mark-paid:hover {
+  background: rgba(89, 227, 180, 0.1);
+}
+
 @media (max-width: 480px) {
   .result-actions, .webhook { align-items: stretch; flex-direction: column; }
 }

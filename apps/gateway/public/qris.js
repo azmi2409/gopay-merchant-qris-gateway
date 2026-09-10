@@ -49,9 +49,22 @@
             updateCountdown();
             updateProgress();
 
-            // Enable auto-poll by default
-            document.getElementById('chk-auto').checked = true;
-            startAutoPoll();
+            if (qrisData.verification_mode === 'manual') {
+                const notice = document.getElementById('manual-notice');
+                if (notice) notice.style.display = 'flex';
+                const autoPollRow = document.querySelector('.auto-poll-toggle');
+                if (autoPollRow) autoPollRow.style.display = 'none';
+                const statusBadge = document.getElementById('status-badge');
+                if (statusBadge) {
+                    document.getElementById('status-text').textContent = 'Konfirmasi Manual';
+                }
+                const btnCheck = document.getElementById('btn-check');
+                if (btnCheck) btnCheck.style.display = 'none';
+            } else {
+                // Enable auto-poll by default for automatic verification
+                document.getElementById('chk-auto').checked = true;
+                startAutoPoll();
+            }
 
         } catch (err) {
             console.error('Failed to load QRIS data:', err);

@@ -10,7 +10,7 @@ import {
 import { getGatewaySettings, updateGatewaySettings } from '../services/settingsService';
 import { generateDynamicQRIS, parseEMVCoTags } from '../utils/qris';
 import { createQris, QrisCreationError } from '../services/qrisService';
-import { getQRISRecord } from '../services/paymentService';
+import { getQRISRecord, logActivity, updateQRISStatus } from '../services/paymentService';
 import {
   listWebhooks,
   pingWebhookUrl,
@@ -104,6 +104,33 @@ adminRouter.delete('/internal/admin/webhooks/:id', async (req: Request, res: Res
     success: removed,
     message: removed ? 'Webhook removed' : 'Webhook not found'
   });
+});
+
+adminRouter.post('/internal/admin/qris/:id/mark-paid', async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const qris = await getQRISRecord(id);
+  if (!qris) {
+    res.status(404).json({ success: false, message: 'QRIS not found' });
+    return;
+  }
+  if (qris.status === 'PAID') {
+    res.json({ success: true, message: 'QRIS is already paid' });
+    return;
+  }
+
+  const manualTx = {
+    transaction_id: 'MANUAL-' + Date.now(),
+    order_id: qris.trxId || qris.id,
+    amount: qris.amount,
+    raw_amount: qris.amount,
+    payer_issuer: 'Manual Merchant Confirmation',
+    payment_type: 'MANUAL_QRIS',
+    transaction_time: new Date().toISOString()
+  };
+
+  await updateQRISStatus(id, 'PAID', manualTx);
+  logActivity('SUCCESS', `QRIS ${id} manually marked as PAID by admin`);
+  res.json({ success: true, data: { status: 'PAID', transaction: manualTx } });
 });
 
 adminRouter.get('/internal/admin/settings', async (_req: Request, res: Response) => {
