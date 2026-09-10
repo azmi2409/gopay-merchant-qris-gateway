@@ -53,19 +53,19 @@ export async function runLoginFlow(existingRl?: readline.Interface): Promise<boo
   try {
     // 1. Input Phone Number
     const rawPhone = await askQuestion(
-      '>> Masukkan Nomor HP GoBiz/GoFood Merchant (contoh: 085119772671): ',
+      '>> Enter GoBiz/GoFood Merchant Phone Number (e.g., 085119772671): ',
       rl
     );
     const nationalPhone = parsePhoneInput(rawPhone);
 
     if (!nationalPhone || nationalPhone.length < 8) {
-      console.log('[-] Nomor HP tidak valid. Silakan coba lagi.');
+      console.log('[-] Invalid phone number. Please try again.');
       if (shouldCloseRl) rl.close();
       return false;
     }
 
     const formattedInternationalPhone = `+62${nationalPhone}`;
-    console.log(`[*] Mengirim permintaan OTP ke nomor: ${formattedInternationalPhone}...`);
+    console.log(`[*] Sending OTP request to: ${formattedInternationalPhone}...`);
 
     // 2. Request OTP from GoBiz
     let requestOtpResponse;
@@ -86,7 +86,7 @@ export async function runLoginFlow(existingRl?: readline.Interface): Promise<boo
       const errorDetail = requestError.response
         ? JSON.stringify(requestError.response.data)
         : requestError.message;
-      console.log(`[-] Gagal meminta OTP dari server GoBiz: ${errorDetail}`);
+      console.log(`[-] Failed to request OTP from GoBiz server: ${errorDetail}`);
       if (shouldCloseRl) rl.close();
       return false;
     }
@@ -96,24 +96,24 @@ export async function runLoginFlow(existingRl?: readline.Interface): Promise<boo
     const expiresIn = requestData.expires_in || 720;
 
     if (!otpToken) {
-      console.log('[-] Respon GoBiz tidak mengembalikan token OTP.');
+      console.log('[-] GoBiz response did not return an OTP token.');
       if (shouldCloseRl) rl.close();
       return false;
     }
 
-    console.log('[+] Kode OTP (4 digit) berhasil dikirim via SMS!');
-    console.log(`[*] Berlaku selama ${expiresIn} detik.\n`);
+    console.log('[+] OTP code (4 digits) sent via SMS successfully!');
+    console.log(`[*] Valid for ${expiresIn} seconds.\n`);
 
     // 3. Input OTP Code
-    const otpCode = await askQuestion('>> Masukkan Kode OTP (4 digit): ', rl);
+    const otpCode = await askQuestion('>> Enter OTP Code (4 digits): ', rl);
 
     if (!otpCode || otpCode.trim().length === 0) {
-      console.log('[-] Kode OTP tidak boleh kosong.');
+      console.log('[-] OTP code cannot be empty.');
       if (shouldCloseRl) rl.close();
       return false;
     }
 
-    console.log('[*] Memverifikasi kode OTP...');
+    console.log('[*] Verifying OTP code...');
 
     // 4. Verify OTP
     let verifyResponse;
@@ -137,7 +137,7 @@ export async function runLoginFlow(existingRl?: readline.Interface): Promise<boo
       const errorDetail = verifyError.response
         ? JSON.stringify(verifyError.response.data)
         : verifyError.message;
-      console.log(`[-] Gagal verifikasi OTP: ${errorDetail}`);
+      console.log(`[-] Failed to verify OTP: ${errorDetail}`);
       if (shouldCloseRl) rl.close();
       return false;
     }
@@ -148,13 +148,13 @@ export async function runLoginFlow(existingRl?: readline.Interface): Promise<boo
     const tokenExpiresIn = tokenData.expires_in || 86400;
 
     if (!accessToken) {
-      console.log('[-] Verifikasi berhasil tetapi access_token tidak ditemukan.');
+      console.log('[-] Verification succeeded but access_token was not found.');
       if (shouldCloseRl) rl.close();
       return false;
     }
 
     // 5. Fetch Merchant & Outlet Info
-    console.log('[*] Mengambil data merchant & outlet info...');
+    console.log('[*] Fetching merchant & outlet info...');
     let merchantId: string | null = null;
     let outletName = 'Merchant GoPay';
 
@@ -187,7 +187,7 @@ export async function runLoginFlow(existingRl?: readline.Interface): Promise<boo
       }
     } catch {
       console.warn(
-        '[!] Peringatan: Tidak dapat mengambil rincian nama outlet dari GoBiz (menggunakan default).'
+        '[!] Warning: Unable to fetch outlet name details from GoBiz (using default).'
       );
     }
 
@@ -209,27 +209,27 @@ export async function runLoginFlow(existingRl?: readline.Interface): Promise<boo
       });
     } catch (saveError: any) {
       console.log(
-        `[-] Gagal mengenkripsi dan menyimpan file sesi ${sessionManager.SESSION_FILE}: ${saveError.message}`
+        `[-] Failed to encrypt and save session file ${sessionManager.SESSION_FILE}: ${saveError.message}`
       );
       if (shouldCloseRl) rl.close();
       return false;
     }
 
     console.log('\n====================================================');
-    console.log('   [SUCCESS] LOGIN BERHASIL & SESI TERENKRIPSI!     ');
+    console.log('   [SUCCESS] LOGIN SUCCESSFUL & SESSION ENCRYPTED!  ');
     console.log('====================================================');
-    console.log(`File Sesi    : gopay_session (AES-256-GCM Encrypted)`);
+    console.log(`Session File : gopay_session (AES-256-GCM Encrypted)`);
     console.log(`Master Key   : ${MASTER_KEY_FILE}`);
-    console.log(`Nomor HP     : ${formattedInternationalPhone}`);
+    console.log(`Phone Number : ${formattedInternationalPhone}`);
     console.log(`Merchant ID  : ${merchantId || '-'}`);
     console.log(`Outlet Name  : ${outletName}`);
     console.log(`Token Exp    : ${tokenExpirationIso}`);
-    console.log('\nSesi akan diperbarui (auto-refresh) secara otomatis oleh gateway.\n');
+    console.log('\nSession will be automatically refreshed by the gateway.\n');
 
     if (shouldCloseRl) rl.close();
     return true;
   } catch (unexpectedError: any) {
-    console.error('[-] Terjadi kesalahan tidak terduga:', unexpectedError.message);
+    console.error('[-] Unexpected error occurred:', unexpectedError.message);
     if (shouldCloseRl) rl.close();
     return false;
   }

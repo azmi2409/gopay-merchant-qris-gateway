@@ -7,61 +7,20 @@ import {
   verifyPayment,
   logActivity
 } from '../services/paymentService';
+import { withRetry } from '../utils/retry';
 import { FormattedTransaction, GoPayTransactionsResponse } from '../types/gopay';
 
 export const transactionRouter: Router = Router();
 
-// Token and Session Status
-transactionRouter.get('/token-status', apiKeyAuth, async (req: Request, res: Response) => {
-  const activeHeaders = await sessionManager.getValidHeaders(req.headers['user-agent']);
-  if (!activeHeaders) {
-    res.json({
-      success: false,
-      data: {
-        token_status: 'invalid',
-        message: 'Sesi belum dikonfigurasi. Jalankan `npm run login` di terminal.'
-      }
-    });
-    return;
-  }
-
-  try {
-    const merchantId = process.env.GOPAY_MERCHANT_ID || '';
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 3600 * 1000).toISOString();
-
-    await axios.get(GOJEK_TRANSACTIONS_URL, {
-      headers: activeHeaders,
-      params: {
-        from: 0,
-        size: 1,
-        statuses: 'SETTLEMENT,CAPTURE',
-        payment_types: 'QRIS,GOPAY',
-        start_time: oneHourAgo,
-        end_time: now.toISOString(),
-        merchant_ids: merchantId
-      },
-      timeout: 5000
-    });
-
-    res.json({
-      success: true,
-      data: { token_status: 'valid', message: 'Token dan Sesi GoPay Merchant Aktif' }
-    });
-  } catch (err: any) {
-    res.json({ success: false, data: { token_status: 'invalid', message: err.message } });
-  }
-});
-
-// Fetch transaction history
-transactionRouter.get('/transactions', apiKeyAuth, async (req: Request, res: Response) => {
+// GET /api/v1/transactions
+transactionRouter.get('/api/v1/transactions', apiKeyAuth, async (req: Request, res: Response) => {
   const clientUa = req.headers['user-agent'] || null;
   const headers = await sessionManager.getValidHeaders(clientUa);
 
   if (!headers) {
     res.status(400).json({
       success: false,
-      error: 'Sesi GoPay belum tersedia. Silakan jalankan `npm run login` di terminal.'
+      error: 'GoPay session not available. Please run `npm run login` in the terminal.'
     });
     return;
   }
@@ -80,19 +39,21 @@ transactionRouter.get('/transactions', apiKeyAuth, async (req: Request, res: Res
         ? new Date(parseInt(String(req.query.endTime), 10) * 1000).toISOString()
         : now.toISOString();
 
-      return await axios.get<GoPayTransactionsResponse>(GOJEK_TRANSACTIONS_URL, {
-        headers: activeHeaders,
-        params: {
-          from: 0,
-          size: parseInt(String(req.query.pageSize || '20'), 10),
-          statuses: 'SETTLEMENT,CAPTURE,REFUND,PARTIAL_REFUND',
-          payment_types: 'QRIS,GOPAY,OFFLINE_CREDIT_CARD,OFFLINE_DEBIT_CARD,CREDIT_CARD',
-          start_time: startTimeISO,
-          end_time: endTimeISO,
-          merchant_ids: merchantId
-        },
-        timeout: 10000
-      });
+      return await withRetry(() =>
+        axios.get<GoPayTransactionsResponse>(GOJEK_TRANSACTIONS_URL, {
+          headers: activeHeaders,
+          params: {
+            from: 0,
+            size: parseInt(String(req.query.pageSize || '20'), 10),
+            statuses: 'SETTLEMENT,CAPTURE,REFUND,PARTIAL_REFUND',
+            payment_types: 'QRIS,GOPAY,OFFLINE_CREDIT_CARD,OFFLINE_DEBIT_CARD,CREDIT_CARD',
+            start_time: startTimeISO,
+            end_time: endTimeISO,
+            merchant_ids: merchantId
+          },
+          timeout: 10000
+        })
+      );
     };
 
     let response;
@@ -100,7 +61,7 @@ transactionRouter.get('/transactions', apiKeyAuth, async (req: Request, res: Res
       response = await fetchTransactions(headers);
     } catch (firstErr: any) {
       if (firstErr.response && firstErr.response.status === 401) {
-        logActivity('WARNING', 'Sesi expired (401). Memulai auto-refresh...');
+        logActivity('WARNING', 'Session expired (401). Starting auto-refresh...');
         const refreshed = await sessionManager.refreshSession();
         if (refreshed) {
           const newHeaders = await sessionManager.getValidHeaders(clientUa);
@@ -145,27 +106,14 @@ transactionRouter.get('/transactions', apiKeyAuth, async (req: Request, res: Res
   }
 });
 
-// Shortcut for all transactions this month
-transactionRouter.get('/transactions/all', apiKeyAuth, async (req: Request, res: Response) => {
-  const now = new Date();
-  const startOfMonthUnix = Math.floor(
-    new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000
-  );
-  req.query.startTime = String(startOfMonthUnix);
-  req.query.pageSize = '100';
-
-  // Delegate directly to the transactions endpoint logic
-  (req.app._router as any).handle({ ...req, url: '/transactions', method: 'GET' }, res);
-});
-
-// Check payment (supports GET and POST)
-transactionRouter.all('/check-payment', apiKeyAuth, async (req: Request, res: Response) => {
-  const amount = req.body?.amount || req.query?.amount;
-  const startTime = req.body?.startTime || req.query?.startTime || req.query?.start_time;
-  const scopeId = req.body?.trx_id || req.query?.trx_id || null;
+// POST /api/v1/payments/verify
+transactionRouter.post('/api/v1/payments/verify', apiKeyAuth, async (req: Request, res: Response) => {
+  const amount = req.body?.amount ?? req.query?.amount;
+  const startTime = req.body?.startTime ?? req.query?.startTime;
+  const scopeId = req.body?.trx_id ?? req.query?.trx_id ?? null;
 
   if (!amount || isNaN(Number(amount))) {
-    res.status(400).json({ success: false, message: 'Nominal pembayaran tidak valid' });
+    res.status(400).json({ success: false, message: 'Invalid payment amount' });
     return;
   }
 
@@ -183,7 +131,7 @@ transactionRouter.all('/check-payment', apiKeyAuth, async (req: Request, res: Re
     if (matchedTransaction) {
       logActivity(
         'SUCCESS',
-        `Pembayaran terverifikasi lunas untuk nominal Rp ${parseInt(String(amount), 10)}`,
+        `Payment verified for amount Rp ${parseInt(String(amount), 10)}`,
         matchedTransaction
       );
       res.json({
@@ -197,17 +145,61 @@ transactionRouter.all('/check-payment', apiKeyAuth, async (req: Request, res: Re
     res.json({
       success: true,
       paid: false,
-      message: 'Pembayaran belum ditemukan atau sudah pernah diklaim'
+      message: 'Payment not found or already claimed'
     });
   } catch (err: any) {
     const errorDetail = err.response
       ? `HTTP ${err.response.status}: ${JSON.stringify(err.response.data)}`
       : err.message;
-    logActivity('ERROR', `Gagal periksa pembayaran: ${errorDetail}`);
+    logActivity('ERROR', `Failed to verify payment: ${errorDetail}`);
     res.status(500).json({
       success: false,
-      message: 'Gagal mengambil data transaksi dari API GoPay',
+      message: 'Failed to fetch transaction data from GoPay API',
       error: errorDetail
     });
+  }
+});
+
+// GET /api/v1/session/status
+transactionRouter.get('/api/v1/session/status', apiKeyAuth, async (req: Request, res: Response) => {
+  const activeHeaders = await sessionManager.getValidHeaders(req.headers['user-agent']);
+  if (!activeHeaders) {
+    res.json({
+      success: false,
+      data: {
+        token_status: 'invalid',
+        message: 'Session not configured. Run `npm run login` in the terminal.'
+      }
+    });
+    return;
+  }
+
+  try {
+    const merchantId = process.env.GOPAY_MERCHANT_ID || '';
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 3600 * 1000).toISOString();
+
+    await withRetry(() =>
+      axios.get(GOJEK_TRANSACTIONS_URL, {
+        headers: activeHeaders,
+        params: {
+          from: 0,
+          size: 1,
+          statuses: 'SETTLEMENT,CAPTURE',
+          payment_types: 'QRIS,GOPAY',
+          start_time: oneHourAgo,
+          end_time: now.toISOString(),
+          merchant_ids: merchantId
+        },
+        timeout: 5000
+      })
+    );
+
+    res.json({
+      success: true,
+      data: { token_status: 'valid', message: 'GoPay Merchant Token and Session Active' }
+    });
+  } catch (err: any) {
+    res.json({ success: false, data: { token_status: 'invalid', message: err.message } });
   }
 });

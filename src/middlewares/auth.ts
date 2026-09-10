@@ -12,7 +12,7 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction): voi
   if (!apiKey || apiKey !== process.env.API_KEY) {
     res.status(401).json({
       success: false,
-      message: 'Autentikasi Gagal: API Key tidak valid'
+      message: 'Authentication Failed: Invalid API Key'
     });
     return;
   }

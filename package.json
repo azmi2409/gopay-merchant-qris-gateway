@@ -2,6 +2,8 @@
   "name": "gopay-merchant-qris-gateway",
   "version": "1.0.0",
   "description": "GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1)",
+  "author": "Azmi Muwahid (https://github.com/azmi2409)",
+  "license": "MIT",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
@@ -27,7 +29,5 @@
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
-  },
-  "author": "Azmi Muwahid (https://github.com/azmi2409)",
-  "license": "MIT"
+  }
 }

@@ -16,13 +16,13 @@ function getParamId(param: string | string[] | undefined): string {
   return param || '';
 }
 
-// Create dynamic QRIS (GET query or POST body)
-qrisRouter.all('/create-qris', apiKeyAuth, (req: Request, res: Response) => {
-  const amountParam = req.body?.amount || req.query?.amount;
+// POST /api/v1/qris
+qrisRouter.post('/api/v1/qris', apiKeyAuth, (req: Request, res: Response) => {
+  const amountParam = req.body?.amount ?? req.query?.amount;
   if (!amountParam || isNaN(Number(amountParam)) || Number(amountParam) <= 0) {
     res.status(400).json({
       success: false,
-      message: 'Nominal pembayaran tidak valid (gunakan ?amount=...)'
+      message: 'Invalid payment amount (send { "amount": 50000 } in body)'
     });
     return;
   }
@@ -31,7 +31,7 @@ qrisRouter.all('/create-qris', apiKeyAuth, (req: Request, res: Response) => {
   if (!staticTemplate) {
     res.status(500).json({
       success: false,
-      message: 'QRIS_STATIC belum dikonfigurasi di .env'
+      message: 'QRIS_STATIC is not configured in .env'
     });
     return;
   }
@@ -41,7 +41,7 @@ qrisRouter.all('/create-qris', apiKeyAuth, (req: Request, res: Response) => {
   if (!dynamicCode) {
     res.status(500).json({
       success: false,
-      message: 'Gagal membuat QRIS dinamis dari template statis'
+      message: 'Failed to generate dynamic QRIS from static template'
     });
     return;
   }
@@ -65,9 +65,9 @@ qrisRouter.all('/create-qris', apiKeyAuth, (req: Request, res: Response) => {
   const protocol = req.protocol;
   const publicUrl = `${protocol}://${host}/qr/${qrisId}`;
 
-  logActivity('INFO', `QRIS Dinamis dibuat | TRX-ID: ${trxId} | Nominal: Rp ${amount}`);
+  logActivity('INFO', `Dynamic QRIS created | TRX-ID: ${trxId} | Amount: Rp ${amount}`);
 
-  res.json({
+  res.status(201).json({
     success: true,
     data: {
       qris_id: qrisId,
@@ -76,17 +76,17 @@ qrisRouter.all('/create-qris', apiKeyAuth, (req: Request, res: Response) => {
       qris_code: dynamicCode,
       amount,
       expires_at: expiresAt.toISOString(),
-      expires_in: '5 menit'
+      expires_in: '5 minutes'
     }
   });
 });
 
-// JSON data endpoint for the frontend interactive page
-qrisRouter.get('/api/qr-data/:id', (req: Request, res: Response) => {
+// GET /api/v1/qris/:id
+qrisRouter.get('/api/v1/qris/:id', (req: Request, res: Response) => {
   const id = getParamId(req.params.id);
   const qris = qrisStore.get(id);
   if (!qris) {
-    res.json({ success: false, status: 'NOT_FOUND', message: 'QRIS tidak ditemukan' });
+    res.status(404).json({ success: false, status: 'NOT_FOUND', message: 'QRIS not found' });
     return;
   }
 
@@ -118,41 +118,12 @@ qrisRouter.get('/api/qr-data/:id', (req: Request, res: Response) => {
   });
 });
 
-// Serve frontend HTML page or redirect to raw QR code image
-qrisRouter.get('/qr/:id', (req: Request, res: Response) => {
-  const id = getParamId(req.params.id);
-  const qris = qrisStore.get(id);
-  if (!qris) {
-    res
-      .status(404)
-      .send(
-        '<h3 style="font-family:sans-serif;color:#94a3b8;text-align:center;margin-top:40vh;">QRIS tidak ditemukan atau telah dihapus</h3>'
-      );
-    return;
-  }
-
-  if (req.query.format === 'raw' || req.query.raw === '1') {
-    if (Date.now() > qris.expiresAt.getTime()) {
-      qrisStore.delete(id);
-      res.status(410).send('QRIS Kedaluwarsa');
-      return;
-    }
-    const qrServerUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
-      qris.data
-    )}`;
-    res.redirect(302, qrServerUrl);
-    return;
-  }
-
-  res.sendFile(path.join(process.cwd(), 'public', 'qris.html'));
-});
-
-// Public payment status checking endpoint
-qrisRouter.get('/api/qr-status/:id', async (req: Request, res: Response) => {
+// GET /api/v1/qris/:id/status
+qrisRouter.get('/api/v1/qris/:id/status', async (req: Request, res: Response) => {
   const qrisId = getParamId(req.params.id);
   const qris = qrisStore.get(qrisId);
   if (!qris) {
-    res.json({ success: false, status: 'NOT_FOUND', message: 'QRIS tidak ditemukan' });
+    res.status(404).json({ success: false, status: 'NOT_FOUND', message: 'QRIS not found' });
     return;
   }
 
@@ -163,11 +134,11 @@ qrisRouter.get('/api/qr-status/:id', async (req: Request, res: Response) => {
 
   if (Date.now() > qris.expiresAt.getTime()) {
     qrisStore.delete(qrisId);
-    res.json({
+    res.status(410).json({
       success: false,
       paid: false,
       status: 'EXPIRED',
-      message: 'QRIS sudah kedaluwarsa'
+      message: 'QRIS has expired'
     });
     return;
   }
@@ -189,7 +160,7 @@ qrisRouter.get('/api/qr-status/:id', async (req: Request, res: Response) => {
       qrisStore.set(qrisId, qris);
       logActivity(
         'SUCCESS',
-        `Pembayaran QRIS ID ${qrisId} terverifikasi lunas untuk nominal Rp ${qris.amount}`
+        `QRIS payment ID ${qrisId} verified for amount Rp ${qris.amount}`
       );
       res.json({ success: true, paid: true, status: 'PAID', transaction: matched });
       return;
@@ -199,9 +170,38 @@ qrisRouter.get('/api/qr-status/:id', async (req: Request, res: Response) => {
       success: true,
       paid: false,
       status: 'PENDING',
-      message: 'Belum ada pembayaran masuk'
+      message: 'No payment received yet'
     });
   } catch (err: any) {
-    res.json({ success: false, paid: false, status: 'PENDING', message: err.message });
+    res.status(500).json({ success: false, paid: false, status: 'PENDING', message: err.message });
   }
+});
+
+// GET /qr/:id (Customer payment landing page)
+qrisRouter.get('/qr/:id', (req: Request, res: Response) => {
+  const id = getParamId(req.params.id);
+  const qris = qrisStore.get(id);
+  if (!qris) {
+    res
+      .status(404)
+      .send(
+        '<h3 style="font-family:sans-serif;color:#94a3b8;text-align:center;margin-top:40vh;">QRIS not found or has been removed</h3>'
+      );
+    return;
+  }
+
+  if (req.query.format === 'raw' || req.query.raw === '1') {
+    if (Date.now() > qris.expiresAt.getTime()) {
+      qrisStore.delete(id);
+      res.status(410).send('QRIS Expired');
+      return;
+    }
+    const qrServerUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+      qris.data
+    )}`;
+    res.redirect(302, qrServerUrl);
+    return;
+  }
+
+  res.sendFile(path.join(process.cwd(), 'public', 'qris.html'));
 });

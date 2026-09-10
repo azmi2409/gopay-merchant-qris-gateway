@@ -17,7 +17,7 @@
     // ── Fetch QRIS data from API ──
     async function init() {
         try {
-            const res = await fetch('/api/qr-data/' + qrisId);
+            const res = await fetch('/api/v1/qris/' + qrisId);
             const json = await res.json();
 
             if (!json.success) {
@@ -34,7 +34,7 @@
             document.getElementById('qr-image').src = qrisData.qr_image_url;
             document.getElementById('payment-card').style.display = 'block';
 
-            document.title = 'Pembayaran QRIS - ' + qrisData.formatted_amount;
+            document.title = 'QRIS Payment - ' + qrisData.formatted_amount;
 
             // Check if already paid
             if (qrisData.status === 'PAID' && qrisData.transaction) {
@@ -71,7 +71,7 @@
 
             document.getElementById('status-badge').className = 'status-badge status-expired';
             document.getElementById('status-icon').textContent = '❌';
-            document.getElementById('status-text').textContent = 'QRIS Kedaluwarsa';
+            document.getElementById('status-text').textContent = 'QRIS Expired';
             document.getElementById('btn-check').disabled = true;
             document.getElementById('chk-auto').disabled = true;
             document.getElementById('scan-hint').style.display = 'none';
@@ -115,10 +115,10 @@
 
         btn.disabled = true;
         spinner.style.display = 'inline-block';
-        label.textContent = 'Memeriksa...';
+        label.textContent = 'Checking...';
 
         try {
-            const res = await fetch('/api/qr-status/' + qrisId);
+            const res = await fetch('/api/v1/qris/' + qrisId + '/status');
             const data = await res.json();
 
             if (data.success && data.paid) {
@@ -127,10 +127,10 @@
                 isExpired = true;
                 updateCountdown();
             } else {
-                document.getElementById('status-text').textContent = 'Belum ada pembayaran masuk...';
+                document.getElementById('status-text').textContent = 'No payment received yet...';
                 setTimeout(() => {
                     if (!isPaid && !isExpired) {
-                        document.getElementById('status-text').textContent = 'Menunggu Pembayaran';
+                        document.getElementById('status-text').textContent = 'Waiting for Payment';
                     }
                 }, 2000);
             }
@@ -142,7 +142,7 @@
                 btn.disabled = false;
             }
             spinner.style.display = 'none';
-            label.textContent = 'Cek Status Pembayaran';
+            label.textContent = 'Check Payment Status';
         }
     };
 
@@ -154,7 +154,7 @@
 
         document.getElementById('status-badge').className = 'status-badge status-paid';
         document.getElementById('status-icon').textContent = '✅';
-        document.getElementById('status-text').textContent = 'Pembayaran Berhasil!';
+        document.getElementById('status-text').textContent = 'Payment Successful!';
         document.getElementById('scan-hint').style.display = 'none';
         document.getElementById('btn-check').style.display = 'none';
         document.querySelector('.auto-poll-toggle').style.display = 'none';

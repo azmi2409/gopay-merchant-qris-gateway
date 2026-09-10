@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pembayaran QRIS</title>
-    <meta name="description" content="Scan kode QRIS untuk menyelesaikan pembayaran melalui GoPay, OVO, DANA, atau e-wallet lainnya.">
+    <title>QRIS Payment</title>
+    <meta name="description" content="Scan the QRIS code to complete your payment via GoPay, OVO, DANA, or other e-wallets.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -45,7 +45,7 @@
         </div>
 
         <!-- Amount -->
-        <div class="text-sm font-medium text-slate-400 mb-1.5 tracking-wide">Total Pembayaran</div>
+        <div class="text-sm font-medium text-slate-400 mb-1.5 tracking-wide">Total Payment</div>
         <div id="amount-display" class="amount-gradient text-4xl font-extrabold tracking-tight mb-6 leading-tight">—</div>
 
         <!-- QR Code -->
@@ -62,7 +62,7 @@
                         <line x1="15" y1="9" x2="9" y2="15"/>
                         <line x1="9" y1="9" x2="15" y2="15"/>
                     </svg>
-                    Kedaluwarsa
+                    Expired
                 </div>
             </div>
         </div>
@@ -70,7 +70,7 @@
         <!-- Scan hint -->
         <div id="scan-hint" class="flex items-center justify-center gap-2 text-sm text-slate-500 mb-5">
             <span class="pulse-dot w-2 h-2 rounded-full bg-sky-400"></span>
-            Scan menggunakan GoPay, OVO, DANA, atau e-wallet lainnya
+            Scan using GoPay, OVO, DANA, or other e-wallets
         </div>
 
         <!-- Timer -->
@@ -80,7 +80,7 @@
                     <circle cx="12" cy="12" r="10"/>
                     <polyline points="12 6 12 12 16 14"/>
                 </svg>
-                Batas Waktu
+                Time Remaining
             </span>
             <span id="timer-text" class="timer-value font-mono font-bold text-lg text-amber-400 min-w-15 text-right tracking-wider">05:00</span>
         </div>
@@ -93,14 +93,14 @@
         <!-- Status -->
         <div id="status-badge" class="status-badge flex items-center justify-center gap-2.5 font-semibold text-sm py-3.5 px-5 rounded-xl mb-5 transition-all duration-350 status-pending bg-amber-400/8 text-amber-400 border border-amber-400/20">
             <span id="status-icon">⏳</span>
-            <span id="status-text">Menunggu Pembayaran</span>
+            <span id="status-text">Waiting for Payment</span>
         </div>
 
         <!-- Check button -->
         <button id="btn-check" onclick="checkStatusManual()"
                 class="btn-check w-full bg-gradient-to-br from-sky-500 via-cyan-400 to-sky-400 text-white border-none font-[Inter,system-ui,sans-serif] font-semibold text-sm py-3.5 px-6 rounded-xl cursor-pointer flex items-center justify-center gap-2.5 shadow-[0_8px_24px_rgba(14,165,233,0.25)] transition-all duration-350 relative overflow-hidden hover:not-disabled:translate-y--0.5 hover:not-disabled:shadow-[0_12px_32px_rgba(14,165,233,0.35)] active:not-disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
             <span id="btn-spinner" class="spinner w-4.5 h-4.5 border-2.5 border-white/25 border-t-white rounded-full shrink-0"></span>
-            <span id="btn-label">Cek Status Pembayaran</span>
+            <span id="btn-label">Check Payment Status</span>
         </button>
 
         <!-- Auto-poll toggle -->
@@ -109,7 +109,7 @@
                 <input type="checkbox" id="chk-auto" onchange="handleAutoPollChange(this)" class="opacity-0 w-0 h-0">
                 <span class="toggle-slider absolute inset-0 bg-slate-700/60 rounded-xl cursor-pointer border border-[rgba(56,97,140,0.25)]"></span>
             </label>
-            <label for="chk-auto" class="cursor-pointer">Auto-check setiap 5 detik</label>
+            <label for="chk-auto" class="cursor-pointer">Auto-check every 5 seconds</label>
         </div>
 
         <!-- Success details -->
@@ -120,7 +120,7 @@
                         <polyline points="20 6 9 17 4 12"/>
                     </svg>
                 </span>
-                Pembayaran Berhasil!
+                Payment Successful!
             </div>
             <div class="grid gap-2.5">
                 <div class="flex justify-between items-center px-3 py-2 bg-[rgba(15,23,42,0.4)] rounded-lg">
@@ -128,15 +128,15 @@
                     <span id="tx-order" class="text-sm font-semibold text-slate-100 text-right max-w-[60%] break-all">—</span>
                 </div>
                 <div class="flex justify-between items-center px-3 py-2 bg-[rgba(15,23,42,0.4)] rounded-lg">
-                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Sumber Bayar</span>
+                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Payment Source</span>
                     <span id="tx-issuer" class="text-sm font-semibold text-slate-100 text-right max-w-[60%] break-all">—</span>
                 </div>
                 <div class="flex justify-between items-center px-3 py-2 bg-[rgba(15,23,42,0.4)] rounded-lg">
-                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Waktu</span>
+                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Time</span>
                     <span id="tx-time" class="text-sm font-semibold text-slate-100 text-right max-w-[60%] break-all">—</span>
                 </div>
                 <div class="flex justify-between items-center px-3 py-2 bg-[rgba(15,23,42,0.4)] rounded-lg">
-                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Nominal</span>
+                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Amount</span>
                     <span id="tx-amount" class="text-sm font-semibold text-slate-100 text-right max-w-[60%] break-all">—</span>
                 </div>
             </div>
@@ -148,14 +148,14 @@
                 <rect x="3" y="11" width="18" height="11" rx="2"/>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
-            Transaksi terenkripsi &amp; aman
+            Encrypted &amp; secure transaction
         </div>
     </div>
 
     <!-- Error page -->
     <div id="error-page" style="display:none;" class="error-page text-center text-slate-400">
-        <h2 class="text-xl text-slate-100 mb-2">QRIS Tidak Ditemukan</h2>
-        <p class="text-sm">Kode pembayaran ini tidak ada atau sudah kedaluwarsa.</p>
+        <h2 class="text-xl text-slate-100 mb-2">QRIS Not Found</h2>
+        <p class="text-sm">This payment code does not exist or has expired.</p>
     </div>
 
     <script src="/qris.js"></script>

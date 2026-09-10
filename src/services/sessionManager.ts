@@ -4,6 +4,8 @@ import axios from 'axios';
 import crypto from 'crypto';
 import { GoPaySession, GoBizTokenResponse } from '../types/session';
 import { encryptPayload, decryptPayload } from '../utils/crypto';
+import { logger } from '../utils/logger';
+import { withRetry } from '../utils/retry';
 
 export const SESSION_FILE = path.join(process.cwd(), 'gopay_session');
 export const LEGACY_SESSION_FILE = path.join(process.cwd(), '.GOPAY_SESI_JANGAN_DIHAPUS.json');
@@ -39,7 +41,7 @@ export function loadSession(): GoPaySession | null {
         return decryptPayload<GoPaySession>(rawEncrypted);
       }
     } catch (error: any) {
-      console.error('[SessionManager] Failed to decrypt SESSION_FILE (gopay_session):', error.message);
+      logger.error(`[SessionManager] Failed to decrypt SESSION_FILE (gopay_session): ${error.message}`);
     }
   }
 
@@ -50,21 +52,21 @@ export function loadSession(): GoPaySession | null {
       const legacySession = JSON.parse(rawLegacy) as GoPaySession;
 
       if (legacySession && legacySession.access_token) {
-        console.log('[SessionManager] Migrating legacy unencrypted session to encrypted gopay_session...');
+        logger.info('[SessionManager] Migrating legacy unencrypted session to encrypted gopay_session...');
         const saved = saveSession(legacySession);
 
         // Remove unencrypted legacy file
         try {
           fs.unlinkSync(LEGACY_SESSION_FILE);
-          console.log('[SessionManager] Removed legacy unencrypted session file.');
+          logger.info('[SessionManager] Removed legacy unencrypted session file.');
         } catch (unlinkErr: any) {
-          console.warn(`[SessionManager] Could not delete legacy file: ${unlinkErr.message}`);
+          logger.warn(`[SessionManager] Could not delete legacy file: ${unlinkErr.message}`);
         }
 
         return saved;
       }
     } catch (error: any) {
-      console.error('[SessionManager] Failed to read LEGACY_SESSION_FILE:', error.message);
+      logger.error(`[SessionManager] Failed to read LEGACY_SESSION_FILE: ${error.message}`);
     }
   }
 
@@ -87,7 +89,7 @@ export function loadSession(): GoPaySession | null {
         };
       }
     } catch (error) {
-      console.error('[SessionManager] Failed to read LEGACY_CACHE_FILE:', (error as Error).message);
+      logger.error(`[SessionManager] Failed to read LEGACY_CACHE_FILE: ${(error as Error).message}`);
     }
   }
 
@@ -139,7 +141,7 @@ export function saveSession(
 
   const encryptedEnvelope = encryptPayload(payload);
   fs.writeFileSync(SESSION_FILE, encryptedEnvelope, { mode: 0o600, encoding: 'utf-8' });
-  console.log(`[SessionManager] Session successfully encrypted and saved to ${SESSION_FILE}`);
+  logger.info(`[SessionManager] Session successfully encrypted and saved to ${SESSION_FILE}`);
   return payload;
 }
 
@@ -189,7 +191,7 @@ export function getStandardGoBizHeaders(uniqueId: string = generateUUID()): Reco
 export async function refreshSession(): Promise<GoPaySession | null> {
   const currentSession = loadSession();
   if (!currentSession || !currentSession.refresh_token) {
-    console.warn('[SessionManager] Auto-refresh skipped: refresh_token not found.');
+    logger.warn('[SessionManager] Auto-refresh skipped: refresh_token not found.');
     return null;
   }
 
@@ -211,13 +213,15 @@ export async function refreshSession(): Promise<GoPaySession | null> {
     }
   };
 
-  console.log('[SessionManager] Sending auto-refresh token request to GoBiz...');
+  logger.info('[SessionManager] Sending auto-refresh token request to GoBiz...');
 
   try {
-    const response = await axios.post<GoBizTokenResponse>(GOBIZ_TOKEN_URL, requestBody, {
-      headers,
-      timeout: 10000
-    });
+    const response = await withRetry(() =>
+      axios.post<GoBizTokenResponse>(GOBIZ_TOKEN_URL, requestBody, {
+        headers,
+        timeout: 10000
+      })
+    );
 
     const tokenData = response.data?.data || response.data || {};
     const newAccessToken = tokenData.access_token;
@@ -225,7 +229,7 @@ export async function refreshSession(): Promise<GoPaySession | null> {
     const expiresInSeconds = tokenData.expires_in || 86400;
 
     if (!newAccessToken) {
-      console.error('[SessionManager] GoBiz response missing access_token.');
+      logger.error('[SessionManager] GoBiz response missing access_token.');
       return null;
     }
 
@@ -240,11 +244,11 @@ export async function refreshSession(): Promise<GoPaySession | null> {
       expires_at: newExpiresAt
     });
 
-    console.log('[SessionManager] Auto-refresh token SUCCEEDED! New tokens written to session file.');
+    logger.info('[SessionManager] Auto-refresh token SUCCEEDED! New tokens written to session file.');
     return updatedSession;
   } catch (error: any) {
     const errorDetail = error.response ? JSON.stringify(error.response.data) : error.message;
-    console.error(`[SessionManager] Failed to auto-refresh token: ${errorDetail}`);
+    logger.error(`[SessionManager] Failed to auto-refresh token: ${errorDetail}`);
     return null;
   }
 }
@@ -259,13 +263,13 @@ export async function getValidHeaders(
   let session = loadSession();
 
   if (!session || !session.access_token) {
-    console.warn('[SessionManager] WARNING: GoPay session not available. Run `npm run login`.');
+    logger.warn('[SessionManager] WARNING: GoPay session not available. Run `npm run login`.');
     return null;
   }
 
   // Auto-refresh if token is near expiration
   if (isExpired(session) && session.refresh_token) {
-    console.log('[SessionManager] Session near expiration. Triggering auto-refresh...');
+    logger.info('[SessionManager] Session near expiration. Triggering auto-refresh...');
     const refreshed = await refreshSession();
     if (refreshed) {
       session = refreshed;

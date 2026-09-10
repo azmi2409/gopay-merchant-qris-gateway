@@ -1,5 +1,7 @@
 import axios from 'axios';
 import * as sessionManager from './sessionManager';
+import { logger } from '../utils/logger';
+import { withRetry } from '../utils/retry';
 import {
   ActivityLog,
   ClaimedTransactionRecord,
@@ -33,7 +35,7 @@ export function logActivity(
   if (activityLogs.length > MAX_LOGS) {
     activityLogs.pop();
   }
-  console.log(`[${timestamp}] [${type}] ${message}`);
+  logger.log(type, message, details);
 }
 
 /**
@@ -178,7 +180,7 @@ export async function verifyPayment(
 
   let response;
   try {
-    response = await fetchCheckPayment(headers);
+    response = await withRetry(() => fetchCheckPayment(headers));
   } catch (firstErr: any) {
     if (firstErr.response && firstErr.response.status === 401) {
       logActivity('WARNING', 'Session expired (401) in verifyPayment. Refreshing...');
@@ -186,7 +188,7 @@ export async function verifyPayment(
       if (refreshed) {
         const newHeaders = await sessionManager.getValidHeaders(userAgent);
         if (!newHeaders) throw new Error('Failed to obtain new session headers after refresh');
-        response = await fetchCheckPayment(newHeaders);
+        response = await withRetry(() => fetchCheckPayment(newHeaders));
       } else {
         throw firstErr;
       }

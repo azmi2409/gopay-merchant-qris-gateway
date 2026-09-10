@@ -1,6 +1,7 @@
 import readline from 'readline';
 import * as sessionManager from './sessionManager';
 import { runLoginFlow } from '../login';
+import { logger } from '../utils/logger';
 
 /**
  * Validates session availability on application startup.
@@ -11,7 +12,7 @@ import { runLoginFlow } from '../login';
  *    the token before the server starts handling traffic.
  */
 export async function ensureSessionReady(): Promise<boolean> {
-  console.log('[Startup] Memeriksa status sesi GoPay...');
+  logger.info('[Startup] Checking GoPay session status...');
   let session = sessionManager.loadSession();
 
   // Case 1: No session exists
@@ -24,7 +25,7 @@ export async function ensureSessionReady(): Promise<boolean> {
 
       const answer = await new Promise<string>((resolve) => {
         rl.question(
-          '\n[!] Sesi GoPay belum ditemukan. Apakah Anda ingin login akun GoBiz sekarang? (Y/n): ',
+          '\n[!] GoPay session not found. Would you like to log in with your GoBiz account now? (Y/n): ',
           resolve
         );
       });
@@ -33,13 +34,13 @@ export async function ensureSessionReady(): Promise<boolean> {
         const success = await runLoginFlow(rl);
         return success;
       } else {
-        console.log('[Startup] Login dilewati. Server akan tetap berjalan (endpoint transaksi akan membutuhkan sesi).');
+        logger.info('[Startup] Login skipped. Server will continue running (transaction endpoints will require a session).');
         rl.close();
         return false;
       }
     } else {
-      console.warn(
-        '[Startup] PERINGATAN: Sesi GoPay belum tersedia di environment non-interaktif. Jalankan `pnpm login` di terminal.'
+      logger.warn(
+        '[Startup] WARNING: GoPay session is not available in non-interactive environment. Run `pnpm login` in terminal.'
       );
       return false;
     }
@@ -48,23 +49,23 @@ export async function ensureSessionReady(): Promise<boolean> {
   // Case 2: Session exists - check for expiration
   if (sessionManager.isExpired(session)) {
     if (session.refresh_token) {
-      console.log('[Startup] Sesi GoPay mendekati kedaluwarsa. Melakukan auto-refresh token...');
+      logger.info('[Startup] GoPay session nearing expiration. Performing token auto-refresh...');
       const refreshed = await sessionManager.refreshSession();
       if (refreshed) {
-        console.log('[Startup] Auto-refresh sesi pada startup BERHASIL! Token baru aktif.');
+        logger.info('[Startup] Startup session auto-refresh SUCCEEDED! New token active.');
         return true;
       } else {
-        console.warn(
-          '[Startup] Gagal memperbarui token secara otomatis. Anda mungkin perlu menjalankan `pnpm login` jika sesi telah habis masa berlakunya di server GoBiz.'
+        logger.warn(
+          '[Startup] Failed to auto-refresh token. You may need to run `pnpm login` if the session has expired on GoBiz server.'
         );
         return false;
       }
     } else {
-      console.warn('[Startup] Sesi kedaluwarsa dan tidak memiliki refresh_token. Silakan jalankan `pnpm login`.');
+      logger.warn('[Startup] Session expired and has no refresh_token. Please run `pnpm login`.');
       return false;
     }
   }
 
-  console.log('[Startup] Sesi GoPay AKTIF dan valid.');
+  logger.info('[Startup] GoPay session ACTIVE and valid.');
   return true;
 }

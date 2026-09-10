@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { logger } from './logger';
 
 export const MASTER_KEY_FILE = path.join(process.cwd(), 'gopay.key');
 const ALGORITHM = 'aes-256-gcm';
@@ -35,7 +36,7 @@ export function getMasterKey(): Buffer {
       }
       return crypto.scryptSync(fileContent, 'gopay-salt-v1', 32);
     } catch (err: any) {
-      console.warn(`[Crypto] Failed to read ${MASTER_KEY_FILE}: ${err.message}`);
+      logger.warn(`[Crypto] Failed to read ${MASTER_KEY_FILE}: ${err.message}`);
     }
   }
 
@@ -44,9 +45,9 @@ export function getMasterKey(): Buffer {
   const hexKey = newKey.toString('hex');
   try {
     fs.writeFileSync(MASTER_KEY_FILE, hexKey + '\n', { mode: 0o600, encoding: 'utf-8' });
-    console.log(`[Crypto] Generated new master key saved to ${MASTER_KEY_FILE} (0600)`);
+    logger.info(`[Crypto] Generated new master key saved to ${MASTER_KEY_FILE} (0600)`);
   } catch (err: any) {
-    console.error(`[Crypto] Failed to write master key to file: ${err.message}`);
+    logger.error(`[Crypto] Failed to write master key to file: ${err.message}`);
   }
   return newKey;
 }

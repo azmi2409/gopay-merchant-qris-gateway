@@ -5,6 +5,7 @@ import { app } from './app';
 import * as sessionManager from './services/sessionManager';
 import { cleanExpiredTransactions, logActivity } from './services/paymentService';
 import { ensureSessionReady } from './services/startupService';
+import { logger } from './utils/logger';
 
 const PORT = process.env.PORT || 3000;
 
@@ -66,6 +67,6 @@ async function start(): Promise<void> {
 }
 
 start().catch((err) => {
-  console.error('[Fatal] Server failed to start:', err);
+  logger.error('[Fatal] Server failed to start:', err);
   process.exit(1);
 });
