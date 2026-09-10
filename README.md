@@ -6,6 +6,13 @@
 
 GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1) built with TypeScript and Node.js.
 
+> [!WARNING]
+> **Disclaimer & Unofficial API Notice**
+> This project interacts with unofficial, reverse-engineered private APIs of GoBiz / Gojek / GoPay. It is **not** affiliated with, endorsed by, or officially supported by PT GoTo Gojek Tokopedia Tbk or any of its subsidiaries.
+> - Gojek / GoBiz may alter authentication schemes, introduce rate limits, add bot detection, or invalidate sessions without notice at any time.
+> - Accounts utilizing automated private APIs risk temporary or permanent suspension/blocking.
+> - Use this gateway entirely at your own risk. For critical enterprise production workloads, always prefer official payment gateway aggregator solutions (e.g. Midtrans, Xendit).
+
 ## Key Features
 
 - **100% TypeScript**: Type-safe end-to-end, modular architecture with DTOs and schemas.
