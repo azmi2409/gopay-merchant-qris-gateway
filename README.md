@@ -92,6 +92,10 @@ pnpm start
 | `POST` | `/api/v1/payments/verify` | API Key (`x-api-key`) | Verify settlement mutation manually |
 | `GET` | `/api/v1/transactions` | API Key (`x-api-key`) | Merchant GoPay transaction history |
 | `GET` | `/api/v1/session/status` | API Key (`x-api-key`) | GoBiz merchant session status |
+| `POST` | `/api/v1/webhooks` | API Key (`x-api-key`) | Register a new webhook endpoint with optional HMAC secret |
+| `GET` | `/api/v1/webhooks` | API Key (`x-api-key`) | List all registered webhooks |
+| `DELETE` | `/api/v1/webhooks/:id` | API Key (`x-api-key`) | Delete a webhook registration |
+| `POST` | `/api/v1/webhooks/test` | API Key (`x-api-key`) | Dispatch a test event to matching webhooks |
 | `GET` | `/api/v1/health` | Public | Basic service health information |
 | `GET` | `/api/v1/healthz` | Public | Liveness & Readiness probe (Docker/K8s) |
 | `GET` | `/api/v1/logs` | API Key (`x-api-key`) | Gateway audit and activity logs |

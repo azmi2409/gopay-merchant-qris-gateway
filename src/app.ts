@@ -4,6 +4,7 @@ import path from 'path';
 import { systemRouter } from './routes/system';
 import { qrisRouter } from './routes/qris';
 import { transactionRouter } from './routes/transactions';
+import { webhookRouter } from './routes/webhooks';
 import { logger } from './utils/logger';
 
 export function createApp(): Express {
@@ -32,10 +33,11 @@ export function createApp(): Express {
 
   app.use(express.static(path.join(process.cwd(), 'public')));
 
-  // Mount routes
+  // Mount REST v1 routes
   app.use(systemRouter);
   app.use(qrisRouter);
   app.use(transactionRouter);
+  app.use(webhookRouter);
 
   return app;
 }

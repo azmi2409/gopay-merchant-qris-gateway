@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as sessionManager from './sessionManager';
 import { logger } from '../utils/logger';
 import { withRetry } from '../utils/retry';
+import { dispatchWebhookEvent } from './webhookService';
 import {
   ActivityLog,
   ClaimedTransactionRecord,
@@ -211,6 +212,12 @@ export async function verifyPayment(
 
   if (matched) {
     logActivity('INFO', `TRX ${matched.transaction_id} claimed by QRIS ${qrisId || 'manual'}`);
+    dispatchWebhookEvent('payment.success', {
+      transaction: matched,
+      qris_id: qrisId || null
+    }).catch((err) => {
+      logger.error(`Webhook dispatch error: ${err.message}`);
+    });
   }
 
   return matched;

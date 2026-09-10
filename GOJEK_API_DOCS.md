@@ -52,6 +52,10 @@ The gateway authenticates through **GoID (GoBiz Web Dashboard)**. The active ses
 | `POST` | `/api/v1/payments/verify` | API Key (`x-api-key`) | Manual verification of settlement mutation |
 | `GET` | `/api/v1/transactions` | API Key (`x-api-key`) | GoPay merchant settlement history |
 | `GET` | `/api/v1/session/status` | API Key (`x-api-key`) | GoBiz token and session health status |
+| `POST` | `/api/v1/webhooks` | API Key (`x-api-key`) | Register a new webhook endpoint with optional HMAC secret |
+| `GET` | `/api/v1/webhooks` | API Key (`x-api-key`) | List all registered webhooks |
+| `DELETE` | `/api/v1/webhooks/:id` | API Key (`x-api-key`) | Delete a webhook registration |
+| `POST` | `/api/v1/webhooks/test` | API Key (`x-api-key`) | Dispatch test webhook event |
 | `GET` | `/api/v1/health` | Public | Basic gateway health information |
 | `GET` | `/api/v1/healthz` | Public | Liveness & readiness probe (Kubernetes / Docker) |
 | `GET` | `/api/v1/logs` | API Key (`x-api-key`) | Gateway in-memory activity logs |
