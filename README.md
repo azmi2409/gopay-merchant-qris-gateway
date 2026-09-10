@@ -47,10 +47,15 @@ PORT=3000
 API_KEY=your_secret_api_key
 QRIS_STATIC=00020101021126610014COM.GO-JEK.WWW...
 GOPAY_MERCHANT_ID=your_merchant_id
+GOPAY_MASTER_KEY= # Opsional: jika kosong, otomatis digenerate ke gopay.key (chmod 0600)
 ```
 
-### 3. Login Sesi GoBiz
-Jalankan CLI interaktif untuk menerima OTP via SMS dan menyimpan sesi:
+### 3. Startup & Sesi Terenkripsi
+- Gateway menggunakan enkripsi **AES-256-GCM** ala Rails Master Key (`gopay.key` / `GOPAY_MASTER_KEY`) untuk mengamankan data sesi ke file `gopay_session`.
+- Saat aplikasi dijalankan (`pnpm dev` atau `pnpm start`):
+  - **Sesi Belum Ada**: Jika dijalankan di terminal (TTY), sistem akan otomatis menawarkan prompt login OTP langsung.
+  - **Sesi Kedaluwarsa**: Sistem otomatis melakukan auto-refresh token ke GoBiz sebelum membuka port server.
+- Anda juga bisa login kapan saja via:
 ```bash
 pnpm login
 ```

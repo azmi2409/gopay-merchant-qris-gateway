@@ -12,6 +12,8 @@ legacy/
 .env.*.local
 .gopay_cache.json
 .GOPAY_SESI_JANGAN_DIHAPUS.json
+gopay_session
+gopay.key
 
 # Logs
 *.log

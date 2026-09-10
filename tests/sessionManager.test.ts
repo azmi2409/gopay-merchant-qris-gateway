@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'fs';
 import {
   isExpired,
   generateUUID,
   getStandardGoBizHeaders,
-  EXPIRY_BUFFER_MS
+  loadSession,
+  saveSession,
+  SESSION_FILE,
+  LEGACY_SESSION_FILE
 } from '../src/services/sessionManager';
 import { GoPaySession } from '../src/types/session';
 
@@ -31,7 +35,6 @@ describe('Session Manager Expiry Detection', () => {
       refresh_token: 'test_refresh',
       cookie: 'test_cookie',
       updated_at: new Date().toISOString(),
-      // 2 minutes in future is less than the 5-minute buffer
       expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString()
     };
     expect(isExpired(nearExpirySession)).toBe(true);
@@ -43,7 +46,6 @@ describe('Session Manager Expiry Detection', () => {
       refresh_token: 'test_refresh',
       cookie: 'test_cookie',
       updated_at: new Date().toISOString(),
-      // 1 hour in future
       expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
     };
     expect(isExpired(validSession)).toBe(false);
@@ -54,9 +56,9 @@ describe('UUID and Header Generation', () => {
   it('should generate a valid UUID v4', () => {
     const uuid = generateUUID();
     expect(uuid).toHaveLength(36);
-    expect(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid)).toBe(
-      true
-    );
+    expect(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid)
+    ).toBe(true);
   });
 
   it('should generate headers containing standard GoBiz attributes', () => {
@@ -65,5 +67,48 @@ describe('UUID and Header Generation', () => {
     expect(headers['x-appid']).toBe('go-biz-web-dashboard');
     expect(headers['authentication-type']).toBe('go-id');
     expect(headers['gojek-country-code']).toBe('ID');
+  });
+});
+
+describe('Encrypted Session Persistence (gopay_session)', () => {
+  let backupSession: string | null = null;
+
+  beforeEach(() => {
+    if (fs.existsSync(SESSION_FILE)) {
+      backupSession = fs.readFileSync(SESSION_FILE, 'utf-8');
+    }
+  });
+
+  afterEach(() => {
+    if (backupSession !== null) {
+      fs.writeFileSync(SESSION_FILE, backupSession, 'utf-8');
+    } else if (fs.existsSync(SESSION_FILE)) {
+      fs.unlinkSync(SESSION_FILE);
+    }
+  });
+
+  it('should save encrypted session and decrypt faithfully on loadSession', () => {
+    const testSession = {
+      phone_number: '+628123456789',
+      merchant_id: 'MID-999',
+      outlet_name: 'Test Outlet',
+      access_token: 'secret_jwt_token',
+      refresh_token: 'secret_refresh_token',
+      expires_in: 86400
+    };
+
+    saveSession(testSession);
+
+    // Verify raw file is encrypted (colon-separated envelope, not plain json)
+    const rawContent = fs.readFileSync(SESSION_FILE, 'utf-8');
+    expect(rawContent).not.toContain('secret_jwt_token');
+    expect(rawContent.split(':')).toHaveLength(3);
+
+    // Verify loadSession decrypts correctly
+    const loaded = loadSession();
+    expect(loaded).not.toBeNull();
+    expect(loaded?.access_token).toBe('secret_jwt_token');
+    expect(loaded?.merchant_id).toBe('MID-999');
+    expect(loaded?.phone_number).toBe('+628123456789');
   });
 });

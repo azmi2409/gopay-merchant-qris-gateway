@@ -3,8 +3,10 @@ import path from 'path';
 import axios from 'axios';
 import crypto from 'crypto';
 import { GoPaySession, GoBizTokenResponse } from '../types/session';
+import { encryptPayload, decryptPayload } from '../utils/crypto';
 
-export const SESSION_FILE = path.join(process.cwd(), '.GOPAY_SESI_JANGAN_DIHAPUS.json');
+export const SESSION_FILE = path.join(process.cwd(), 'gopay_session');
+export const LEGACY_SESSION_FILE = path.join(process.cwd(), '.GOPAY_SESI_JANGAN_DIHAPUS.json');
 export const LEGACY_CACHE_FILE = path.join(process.cwd(), '.gopay_cache.json');
 export const GOBIZ_TOKEN_URL = 'https://api.gobiz.co.id/goid/token';
 export const EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes buffer
@@ -24,20 +26,49 @@ export function generateUUID(): string {
 }
 
 /**
- * Loads the active GoPay merchant session from file or environment variables
+ * Loads the active GoPay merchant session.
+ * Decrypts gopay_session using the master key.
+ * Automatically migrates legacy .GOPAY_SESI_JANGAN_DIHAPUS.json if present.
  */
 export function loadSession(): GoPaySession | null {
-  // 1. Primary: Official session file
+  // 1. Primary: Encrypted gopay_session file
   if (fs.existsSync(SESSION_FILE)) {
     try {
-      const rawContent = fs.readFileSync(SESSION_FILE, 'utf-8');
-      return JSON.parse(rawContent) as GoPaySession;
-    } catch (error) {
-      console.error('[SessionManager] Failed to read SESSION_FILE:', (error as Error).message);
+      const rawEncrypted = fs.readFileSync(SESSION_FILE, 'utf-8').trim();
+      if (rawEncrypted) {
+        return decryptPayload<GoPaySession>(rawEncrypted);
+      }
+    } catch (error: any) {
+      console.error('[SessionManager] Failed to decrypt SESSION_FILE (gopay_session):', error.message);
     }
   }
 
-  // 2. Legacy fallback: .gopay_cache.json
+  // 2. Legacy Migration: .GOPAY_SESI_JANGAN_DIHAPUS.json
+  if (fs.existsSync(LEGACY_SESSION_FILE)) {
+    try {
+      const rawLegacy = fs.readFileSync(LEGACY_SESSION_FILE, 'utf-8');
+      const legacySession = JSON.parse(rawLegacy) as GoPaySession;
+
+      if (legacySession && legacySession.access_token) {
+        console.log('[SessionManager] Migrating legacy unencrypted session to encrypted gopay_session...');
+        const saved = saveSession(legacySession);
+
+        // Remove unencrypted legacy file
+        try {
+          fs.unlinkSync(LEGACY_SESSION_FILE);
+          console.log('[SessionManager] Removed legacy unencrypted session file.');
+        } catch (unlinkErr: any) {
+          console.warn(`[SessionManager] Could not delete legacy file: ${unlinkErr.message}`);
+        }
+
+        return saved;
+      }
+    } catch (error: any) {
+      console.error('[SessionManager] Failed to read LEGACY_SESSION_FILE:', error.message);
+    }
+  }
+
+  // 3. Legacy fallback: .gopay_cache.json
   if (fs.existsSync(LEGACY_CACHE_FILE)) {
     try {
       const rawLegacy = fs.readFileSync(LEGACY_CACHE_FILE, 'utf-8');
@@ -60,7 +91,7 @@ export function loadSession(): GoPaySession | null {
     }
   }
 
-  // 3. Fallback env: GOPAY_COOKIE
+  // 4. Fallback env: GOPAY_COOKIE
   if (process.env.GOPAY_COOKIE) {
     const envCookie = process.env.GOPAY_COOKIE;
     const tokenMatch = envCookie.match(/access_token=([^;]+)/);
@@ -81,7 +112,7 @@ export function loadSession(): GoPaySession | null {
 }
 
 /**
- * Saves session data to `.GOPAY_SESI_JANGAN_DIHAPUS.json`
+ * Saves and encrypts session data to `gopay_session` (mode 0600)
  */
 export function saveSession(
   sessionData: Partial<GoPaySession> & { expires_in?: number }
@@ -106,8 +137,9 @@ export function saveSession(
     expires_at: expiresAt
   };
 
-  fs.writeFileSync(SESSION_FILE, JSON.stringify(payload, null, 2), 'utf-8');
-  console.log(`[SessionManager] Session successfully saved to ${SESSION_FILE}`);
+  const encryptedEnvelope = encryptPayload(payload);
+  fs.writeFileSync(SESSION_FILE, encryptedEnvelope, { mode: 0o600, encoding: 'utf-8' });
+  console.log(`[SessionManager] Session successfully encrypted and saved to ${SESSION_FILE}`);
   return payload;
 }
 
