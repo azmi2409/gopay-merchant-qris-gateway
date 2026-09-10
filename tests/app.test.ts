@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app';
 import { initDatabase, getDatabase } from '../src/utils/db';
@@ -100,6 +100,21 @@ describe('API Gateway REST v1 Integration Tests', () => {
       const pageRes = await request(app).get(`/qr/${qrisId}`);
       expect(pageRes.status).toBe(200);
       expect(pageRes.headers['content-type']).toContain('text/html');
+
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(new Uint8Array([137, 80, 78, 71]), {
+          status: 200,
+          headers: { 'Content-Type': 'image/png' }
+        })
+      );
+      const downloadRes = await request(app).get(`/qr/${qrisId}?download=1`);
+      fetchMock.mockRestore();
+
+      expect(downloadRes.status).toBe(200);
+      expect(downloadRes.headers['content-type']).toContain('image/png');
+      expect(downloadRes.headers['content-disposition']).toBe(
+        `attachment; filename="qris-${qrisId}.png"`
+      );
     });
 
     it('GET /api/v1/qris/:id returns 404 for nonexistent id', async () => {

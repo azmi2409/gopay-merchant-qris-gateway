@@ -70,9 +70,9 @@
             timerEl.classList.add('danger');
 
             document.getElementById('status-badge').className = 'status-badge status-expired';
-            document.getElementById('status-icon').textContent = '❌';
-            document.getElementById('status-text').textContent = 'QRIS Expired';
+            document.getElementById('status-text').textContent = 'Kode QRIS kedaluwarsa';
             document.getElementById('btn-check').disabled = true;
+            document.getElementById('btn-download').disabled = true;
             document.getElementById('chk-auto').disabled = true;
             document.getElementById('scan-hint').style.display = 'none';
             document.getElementById('qr-overlay').classList.add('visible');
@@ -115,7 +115,7 @@
 
         btn.disabled = true;
         spinner.style.display = 'inline-block';
-        label.textContent = 'Checking...';
+        label.textContent = 'Memeriksa...';
 
         try {
             const res = await fetch('/api/v1/qris/' + qrisId + '/status');
@@ -127,10 +127,10 @@
                 isExpired = true;
                 updateCountdown();
             } else {
-                document.getElementById('status-text').textContent = 'No payment received yet...';
+                document.getElementById('status-text').textContent = 'Pembayaran belum diterima';
                 setTimeout(() => {
                     if (!isPaid && !isExpired) {
-                        document.getElementById('status-text').textContent = 'Waiting for Payment';
+                        document.getElementById('status-text').textContent = 'Menunggu pembayaran';
                     }
                 }, 2000);
             }
@@ -142,7 +142,7 @@
                 btn.disabled = false;
             }
             spinner.style.display = 'none';
-            label.textContent = 'Check Payment Status';
+            label.textContent = 'Periksa status pembayaran';
         }
     };
 
@@ -153,8 +153,7 @@
         if (countdownInterval) clearInterval(countdownInterval);
 
         document.getElementById('status-badge').className = 'status-badge status-paid';
-        document.getElementById('status-icon').textContent = '✅';
-        document.getElementById('status-text').textContent = 'Payment Successful!';
+        document.getElementById('status-text').textContent = 'Pembayaran berhasil';
         document.getElementById('scan-hint').style.display = 'none';
         document.getElementById('btn-check').style.display = 'none';
         document.querySelector('.auto-poll-toggle').style.display = 'none';
@@ -200,6 +199,16 @@
         } else {
             stopAutoPoll();
         }
+    };
+
+    window.downloadQR = function() {
+        if (!qrisData) return;
+
+        const link = document.createElement('a');
+        link.href = '/qr/' + encodeURIComponent(qrisId) + '?download=1';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
     };
 
     // ── Confetti Animation ──

@@ -229,5 +229,30 @@ qrisRouter.get('/qr/:id', async (req: Request, res: Response) => {
     return;
   }
 
+  if (req.query.download === '1') {
+    if (Date.now() > qris.expiresAt.getTime()) {
+      await deleteQRISRecord(id);
+      res.status(410).send('QRIS Expired');
+      return;
+    }
+
+    const qrServerUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&format=png&data=${encodeURIComponent(
+      qris.data
+    )}`;
+    const qrResponse = await fetch(qrServerUrl);
+    if (!qrResponse.ok) {
+      res.status(502).send('Failed to generate QRIS image');
+      return;
+    }
+
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Disposition': `attachment; filename="qris-${id}.png"`,
+      'Cache-Control': 'private, no-store'
+    });
+    res.send(Buffer.from(await qrResponse.arrayBuffer()));
+    return;
+  }
+
   res.sendFile(path.join(process.cwd(), 'public', 'qris.html'));
 });

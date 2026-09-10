@@ -1,162 +1,130 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QRIS Payment</title>
-    <meta name="description" content="Scan the QRIS code to complete your payment via GoPay, OVO, DANA, or other e-wallets.">
+    <meta name="theme-color" content="#eef0f3">
+    <title>Pembayaran QRIS</title>
+    <meta name="description" content="Pindai kode QRIS untuk menyelesaikan pembayaran.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/qris.css">
-    <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime@0.65.4/uno.global.js"></script>
-    <script>
-    window.__unocss = {
-        rules: [],
-        shortcuts: {
-            'glass-surface': 'bg-[rgba(15,23,42,0.9)] backdrop-blur-xl border border-[rgba(56,97,140,0.25)]',
-            'glass-inner': 'bg-[rgba(15,23,42,0.6)] border border-[rgba(56,97,140,0.25)]',
-        },
-        theme: {
-            colors: {
-                deep: '#080c18',
-                surface: 'rgba(15,23,42,0.85)',
-            }
-        }
-    };
-    </script>
 </head>
-<body class="font-[Inter,system-ui,sans-serif] bg-[#080c18] text-slate-100 min-h-screen flex items-center justify-center p-5 overflow-x-hidden relative">
-    <canvas id="confetti-canvas"></canvas>
+<body>
+    <canvas id="confetti-canvas" aria-hidden="true"></canvas>
 
-    <!-- Payment Card -->
-    <div id="payment-card" style="display:none;"
-         class="card-animate card-accent relative z-1 w-full max-w-[440px] glass-surface rounded-3xl p-7 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6),0_0_0_1px_rgba(56,189,248,0.08)] text-center">
+    <main id="payment-card" class="payment-page" style="display:none;">
+        <section class="merchant-card" aria-labelledby="page-title">
+            <div class="qris-mark" aria-label="QRIS">
+                <span class="qris-corner qris-corner-top"></span>
+                <strong>QRIS</strong>
+                <span class="qris-corner qris-corner-bottom"></span>
+            </div>
+            <p class="eyebrow">Pembayaran aman</p>
+            <h1 id="page-title">Pembayaran QRIS</h1>
+            <p class="merchant-subtitle">Pindai dengan GoPay, OVO, DANA, atau aplikasi perbankan Anda</p>
+            <div class="amount-block">
+                <span>Total pembayaran</span>
+                <strong id="amount-display">-</strong>
+            </div>
+        </section>
 
-        <!-- Badge -->
-        <div class="inline-flex items-center gap-2 bg-sky-500/10 border border-sky-400/20 text-sky-400 font-semibold text-xs tracking-wider uppercase px-4 py-1.5 rounded-full mb-5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <path d="M14 14h3v3M17 17h3v3"/>
-            </svg>
-            QRIS Payment
-        </div>
-
-        <!-- Amount -->
-        <div class="text-sm font-medium text-slate-400 mb-1.5 tracking-wide">Total Payment</div>
-        <div id="amount-display" class="amount-gradient text-4xl font-extrabold tracking-tight mb-6 leading-tight">—</div>
-
-        <!-- QR Code -->
-        <div class="relative inline-block mb-6">
-            <div class="qr-frame bg-white p-4 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.1)] relative">
-                <div class="qr-corner tl"></div>
-                <div class="qr-corner tr"></div>
-                <div class="qr-corner bl"></div>
-                <div class="qr-corner br"></div>
-                <img id="qr-image" src="" alt="QRIS Code" class="block w-55 h-55 rounded-lg">
-                <div id="qr-overlay" class="qr-overlay absolute inset-0 bg-black/70 rounded-2xl flex-col items-center justify-center gap-2 text-red-400 font-bold text-sm">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-10 h-10 stroke-red-400 opacity-80">
-                        <circle cx="12" cy="12" r="10"/>
-                        <line x1="15" y1="9" x2="9" y2="15"/>
-                        <line x1="9" y1="9" x2="15" y2="15"/>
-                    </svg>
-                    Expired
+        <section class="qr-card" aria-label="Kode pembayaran QRIS">
+            <div class="qr-stage">
+                <div class="qr-frame">
+                    <span class="red-accent red-accent-left" aria-hidden="true"></span>
+                    <span class="red-accent red-accent-right" aria-hidden="true"></span>
+                    <img id="qr-image" src="" alt="Kode QRIS untuk pembayaran" crossorigin="anonymous">
+                    <div id="qr-overlay" class="qr-overlay" aria-live="polite">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9"></circle>
+                            <path d="m9 9 6 6m0-6-6 6"></path>
+                        </svg>
+                        <span>Kode kedaluwarsa</span>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Scan hint -->
-        <div id="scan-hint" class="flex items-center justify-center gap-2 text-sm text-slate-500 mb-5">
-            <span class="pulse-dot w-2 h-2 rounded-full bg-sky-400"></span>
-            Scan using GoPay, OVO, DANA, or other e-wallets
-        </div>
+            <p id="scan-hint" class="scan-hint">
+                <span class="pulse-dot" aria-hidden="true"></span>
+                Arahkan kamera ke kode QR
+            </p>
 
-        <!-- Timer -->
-        <div id="timer-row" class="flex items-center justify-between glass-inner rounded-xl px-4.5 py-3 mb-4">
-            <span class="text-sm font-medium text-slate-400 flex items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="opacity-60">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polyline points="12 6 12 12 16 14"/>
+            <button id="btn-download" class="button button-secondary" type="button" onclick="downloadQR()">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"></path>
                 </svg>
-                Time Remaining
-            </span>
-            <span id="timer-text" class="timer-value font-mono font-bold text-lg text-amber-400 min-w-15 text-right tracking-wider">05:00</span>
-        </div>
+                <span id="download-label">Unduh kode QR</span>
+            </button>
 
-        <!-- Progress bar -->
-        <div class="progress-track w-full h-1 bg-slate-700/50 rounded-sm mb-5 overflow-hidden">
-            <div id="progress-fill" class="progress-fill h-full bg-gradient-to-r from-sky-500 via-cyan-400 to-sky-400 rounded-sm w-full"></div>
-        </div>
+            <div class="payment-status">
+                <div id="timer-row" class="timer-row">
+                    <span class="timer-label">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9"></circle>
+                            <path d="M12 7v5l3 2"></path>
+                        </svg>
+                        Sisa waktu
+                    </span>
+                    <span id="timer-text" class="timer-value">05:00</span>
+                </div>
+                <div class="progress-track" aria-hidden="true">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
 
-        <!-- Status -->
-        <div id="status-badge" class="status-badge flex items-center justify-center gap-2.5 font-semibold text-sm py-3.5 px-5 rounded-xl mb-5 transition-all duration-350 status-pending bg-amber-400/8 text-amber-400 border border-amber-400/20">
-            <span id="status-icon">⏳</span>
-            <span id="status-text">Waiting for Payment</span>
-        </div>
+                <div id="status-badge" class="status-badge status-pending" role="status" aria-live="polite">
+                    <span id="status-icon" class="status-icon" aria-hidden="true"></span>
+                    <span id="status-text">Menunggu pembayaran</span>
+                </div>
 
-        <!-- Check button -->
-        <button id="btn-check" onclick="checkStatusManual()"
-                class="btn-check w-full bg-gradient-to-br from-sky-500 via-cyan-400 to-sky-400 text-white border-none font-[Inter,system-ui,sans-serif] font-semibold text-sm py-3.5 px-6 rounded-xl cursor-pointer flex items-center justify-center gap-2.5 shadow-[0_8px_24px_rgba(14,165,233,0.25)] transition-all duration-350 relative overflow-hidden hover:not-disabled:translate-y--0.5 hover:not-disabled:shadow-[0_12px_32px_rgba(14,165,233,0.35)] active:not-disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
-            <span id="btn-spinner" class="spinner w-4.5 h-4.5 border-2.5 border-white/25 border-t-white rounded-full shrink-0"></span>
-            <span id="btn-label">Check Payment Status</span>
-        </button>
-
-        <!-- Auto-poll toggle -->
-        <div class="auto-poll-toggle flex items-center justify-center gap-3 mt-4 text-sm text-slate-500">
-            <label class="toggle-switch relative w-11 h-6 shrink-0">
-                <input type="checkbox" id="chk-auto" onchange="handleAutoPollChange(this)" class="opacity-0 w-0 h-0">
-                <span class="toggle-slider absolute inset-0 bg-slate-700/60 rounded-xl cursor-pointer border border-[rgba(56,97,140,0.25)]"></span>
-            </label>
-            <label for="chk-auto" class="cursor-pointer">Auto-check every 5 seconds</label>
-        </div>
-
-        <!-- Success details -->
-        <div id="success-panel" class="success-panel bg-emerald-400/6 border border-emerald-400/15 rounded-xl p-5 mt-5 text-left">
-            <div class="flex items-center gap-2.5 font-bold text-base text-emerald-400 mb-3.5">
-                <span class="w-7 h-7 bg-gradient-to-br from-emerald-600 to-emerald-400 rounded-full flex items-center justify-center shrink-0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
-                        <polyline points="20 6 9 17 4 12"/>
+                <button id="btn-check" class="button button-primary" type="button" onclick="checkStatusManual()">
+                    <span id="btn-spinner" class="spinner" aria-hidden="true"></span>
+                    <svg class="refresh-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4m-4 5a8 8 0 0 0 14.9 3M20 20v-4h-4"></path>
                     </svg>
-                </span>
-                Payment Successful!
-            </div>
-            <div class="grid gap-2.5">
-                <div class="flex justify-between items-center px-3 py-2 bg-[rgba(15,23,42,0.4)] rounded-lg">
-                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Order ID</span>
-                    <span id="tx-order" class="text-sm font-semibold text-slate-100 text-right max-w-[60%] break-all">—</span>
-                </div>
-                <div class="flex justify-between items-center px-3 py-2 bg-[rgba(15,23,42,0.4)] rounded-lg">
-                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Payment Source</span>
-                    <span id="tx-issuer" class="text-sm font-semibold text-slate-100 text-right max-w-[60%] break-all">—</span>
-                </div>
-                <div class="flex justify-between items-center px-3 py-2 bg-[rgba(15,23,42,0.4)] rounded-lg">
-                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Time</span>
-                    <span id="tx-time" class="text-sm font-semibold text-slate-100 text-right max-w-[60%] break-all">—</span>
-                </div>
-                <div class="flex justify-between items-center px-3 py-2 bg-[rgba(15,23,42,0.4)] rounded-lg">
-                    <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Amount</span>
-                    <span id="tx-amount" class="text-sm font-semibold text-slate-100 text-right max-w-[60%] break-all">—</span>
+                    <span id="btn-label">Periksa status pembayaran</span>
+                </button>
+
+                <div class="auto-poll-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="chk-auto" onchange="handleAutoPollChange(this)">
+                        <span class="toggle-slider" aria-hidden="true"></span>
+                        <span>Periksa otomatis setiap 5 detik</span>
+                    </label>
                 </div>
             </div>
-        </div>
 
-        <!-- Footer -->
-        <div class="mt-6 pt-4 border-t border-slate-700/30 text-xs text-slate-500 flex items-center justify-center gap-1.5">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="opacity-50">
-                <rect x="3" y="11" width="18" height="11" rx="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-            Encrypted &amp; secure transaction
-        </div>
-    </div>
+            <div id="success-panel" class="success-panel">
+                <div class="success-title">
+                    <span class="success-check" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"></path></svg>
+                    </span>
+                    Pembayaran berhasil
+                </div>
+                <dl>
+                    <div><dt>ID Pesanan</dt><dd id="tx-order">-</dd></div>
+                    <div><dt>Sumber Pembayaran</dt><dd id="tx-issuer">-</dd></div>
+                    <div><dt>Waktu</dt><dd id="tx-time">-</dd></div>
+                    <div><dt>Jumlah</dt><dd id="tx-amount">-</dd></div>
+                </dl>
+            </div>
 
-    <!-- Error page -->
-    <div id="error-page" style="display:none;" class="error-page text-center text-slate-400">
-        <h2 class="text-xl text-slate-100 mb-2">QRIS Not Found</h2>
-        <p class="text-sm">This payment code does not exist or has expired.</p>
-    </div>
+            <footer>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="4" y="10" width="16" height="11" rx="2"></rect>
+                    <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+                </svg>
+                Transaksi terenkripsi dan aman
+            </footer>
+        </section>
+    </main>
+
+    <section id="error-page" class="error-page" style="display:none;">
+        <div class="error-icon" aria-hidden="true">!</div>
+        <h1>QRIS tidak ditemukan</h1>
+        <p>Kode pembayaran ini tidak tersedia atau telah kedaluwarsa.</p>
+    </section>
 
     <script src="/qris.js"></script>
 </body>
