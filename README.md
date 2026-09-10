@@ -6,6 +6,8 @@
 
 GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1) built with TypeScript and Node.js.
 
+[Setup](#step-by-step-setup-guide) | [API](#rest-v1-api-specification) | [Contributing](CONTRIBUTE.md) | [Changelog](CHANGELOG.md) | [Deployment](DEPLOY.md)
+
 > [!WARNING]
 > **Disclaimer & Unofficial API Notice**
 > This project interacts with unofficial, reverse-engineered private APIs of GoBiz / Gojek / GoPay. It is **not** affiliated with, endorsed by, or officially supported by PT GoTo Gojek Tokopedia Tbk or any of its subsidiaries.
@@ -25,7 +27,7 @@ GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1) built with TypeScrip
 - **Anti Double-Claiming**: Ensures a single GoPay transaction can only be claimed by one QRIS record.
 - **Session Auto-Refresh**: Automatic token refresh against GoBiz API prior to token expiration.
 - **Centralized Dual Logging**: Stdout/stderr streaming alongside persistent file logging in `logs/app.log`.
-- **Decoupled Frontend**: Modern interactive payment page styled with UnoCSS (`/qr/:id`).
+- **Decoupled Frontend**: Responsive payment page built with native HTML, CSS, and JavaScript (`/qr/:id`).
 - **Comprehensive Unit & Integration Tests**: Full test suite running on Vitest.
 - **Multi-stage Docker Build**: Production-ready with lightweight Node.js Alpine container.
 
@@ -165,7 +167,7 @@ Authenticate your GoBiz merchant account to generate the encrypted session:
 ```bash
 pnpm login
 ```
-1. Enter your registered GoBiz phone number (e.g. `085119772671`).
+1. Enter your registered GoBiz phone number (e.g. `08XXXXXXXXXX`).
 2. Enter the 4-digit SMS OTP received.
 3. The session is encrypted with AES-256-GCM and saved to `gopay_session`.
 *(The gateway automatically auto-refreshes tokens in the background every 6 hours and on startup)*.
@@ -313,3 +315,13 @@ function verifyWebhookSignature(payloadString, signatureHeader, secret) {
   return expectedBuf.length === sigBuf.length && crypto.timingSafeEqual(expectedBuf, sigBuf);
 }
 ```
+
+---
+
+## Releases and Versioning
+
+The project follows [Semantic Versioning](https://semver.org/). Release history and pending user-visible changes are tracked in [CHANGELOG.md](CHANGELOG.md). Git release tags use the `vX.Y.Z` format and should match the version in `package.json`.
+
+## Contributing
+
+Issues and pull requests are welcome. Read [CONTRIBUTE.md](CONTRIBUTE.md) before submitting changes, never include real merchant credentials or QRIS payloads, and run `pnpm run build` plus `pnpm test` before opening a pull request.
