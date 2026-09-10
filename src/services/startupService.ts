@@ -13,7 +13,7 @@ import { logger } from '../utils/logger';
  */
 export async function ensureSessionReady(): Promise<boolean> {
   logger.info('[Startup] Checking GoPay session status...');
-  let session = sessionManager.loadSession();
+  let session = await sessionManager.loadSessionAsync();
 
   // Case 1: No session exists
   if (!session || !session.access_token) {

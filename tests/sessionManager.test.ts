@@ -1,15 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
 import fs from 'fs';
 import {
   isExpired,
   generateUUID,
   getStandardGoBizHeaders,
   loadSession,
+  loadSessionAsync,
   saveSession,
   SESSION_FILE,
-  LEGACY_SESSION_FILE
+  LEGACY_SESSION_FILE,
+  DB_SESSION_KEY
 } from '../src/services/sessionManager';
 import { GoPaySession } from '../src/types/session';
+import { initDatabase, getDatabase } from '../src/utils/db';
 
 describe('Session Manager Expiry Detection', () => {
   it('should return true for null or missing tokens', () => {
@@ -110,5 +113,40 @@ describe('Encrypted Session Persistence (gopay_session)', () => {
     expect(loaded?.access_token).toBe('secret_jwt_token');
     expect(loaded?.merchant_id).toBe('MID-999');
     expect(loaded?.phone_number).toBe('+628123456789');
+  });
+
+  it('should restore session from database when session file is absent (stateless/serverless)', async () => {
+    process.env.DATABASE_URL = 'file::memory:';
+    await initDatabase();
+
+    const statelessSession = {
+      phone_number: '+628999888777',
+      merchant_id: 'MID-STATELESS',
+      outlet_name: 'Stateless Outlet',
+      access_token: 'token_from_db_store',
+      refresh_token: 'refresh_from_db_store',
+      expires_in: 86400
+    };
+
+    saveSession(statelessSession);
+
+    // Remove local file to simulate cold start on fresh serverless container
+    if (fs.existsSync(SESSION_FILE)) {
+      fs.unlinkSync(SESSION_FILE);
+    }
+
+    const loadedAsync = await loadSessionAsync();
+    expect(loadedAsync).not.toBeNull();
+    expect(loadedAsync?.access_token).toBe('token_from_db_store');
+    expect(loadedAsync?.merchant_id).toBe('MID-STATELESS');
+
+    // Confirm database row exists and is encrypted
+    const db = getDatabase();
+    const rows = await db.execute({
+      sql: `SELECT data FROM app_sessions WHERE key = ?`,
+      args: [DB_SESSION_KEY]
+    });
+    expect(rows.rows.length).toBe(1);
+    expect(String(rows.rows[0].data)).not.toContain('token_from_db_store');
   });
 });

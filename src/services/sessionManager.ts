@@ -6,12 +6,16 @@ import { GoPaySession, GoBizTokenResponse } from '../types/session';
 import { encryptPayload, decryptPayload } from '../utils/crypto';
 import { logger } from '../utils/logger';
 import { withRetry } from '../utils/retry';
+import { getDatabase } from '../utils/db';
 
 export const SESSION_FILE = path.join(process.cwd(), 'gopay_session');
 export const LEGACY_SESSION_FILE = path.join(process.cwd(), '.GOPAY_SESI_JANGAN_DIHAPUS.json');
 export const LEGACY_CACHE_FILE = path.join(process.cwd(), '.gopay_cache.json');
 export const GOBIZ_TOKEN_URL = 'https://api.gobiz.co.id/goid/token';
 export const EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes buffer
+export const DB_SESSION_KEY = 'gopay_merchant_session';
+
+let memoryCachedSession: GoPaySession | null = null;
 
 /**
  * Generates a random UUID v4 for GoBiz HTTP headers
@@ -30,15 +34,57 @@ export function generateUUID(): string {
 /**
  * Loads the active GoPay merchant session.
  * Decrypts gopay_session using the master key.
- * Automatically migrates legacy .GOPAY_SESI_JANGAN_DIHAPUS.json if present.
+ * Checks in-memory cache, database table (app_sessions), local file, and legacy sources.
  */
+export async function loadSessionAsync(): Promise<GoPaySession | null> {
+  // 1. In-memory cache
+  if (memoryCachedSession && !isExpired(memoryCachedSession)) {
+    return memoryCachedSession;
+  }
+
+  // 2. Database table: app_sessions
+  try {
+    const db = getDatabase();
+    const result = await db.execute({
+      sql: `SELECT data FROM app_sessions WHERE key = ?`,
+      args: [DB_SESSION_KEY]
+    });
+
+    if (result.rows.length > 0 && result.rows[0].data) {
+      const rawEncrypted = String(result.rows[0].data).trim();
+      const session = decryptPayload<GoPaySession>(rawEncrypted);
+      if (session && session.access_token) {
+        memoryCachedSession = session;
+        return session;
+      }
+    }
+  } catch (dbErr: any) {
+    logger.debug(`[SessionManager] Database session lookup skipped: ${dbErr.message}`);
+  }
+
+  // 3. Fallback to synchronous file/legacy checks
+  const fallback = loadSession();
+  if (fallback) {
+    memoryCachedSession = fallback;
+    // Persist to DB asynchronously for future serverless instances
+    saveSessionToDatabase(fallback).catch(() => {});
+  }
+  return fallback;
+}
+
 export function loadSession(): GoPaySession | null {
+  if (memoryCachedSession && !isExpired(memoryCachedSession)) {
+    return memoryCachedSession;
+  }
+
   // 1. Primary: Encrypted gopay_session file
   if (fs.existsSync(SESSION_FILE)) {
     try {
       const rawEncrypted = fs.readFileSync(SESSION_FILE, 'utf-8').trim();
       if (rawEncrypted) {
-        return decryptPayload<GoPaySession>(rawEncrypted);
+        const session = decryptPayload<GoPaySession>(rawEncrypted);
+        if (session) memoryCachedSession = session;
+        return session;
       }
     } catch (error: any) {
       logger.error(`[SessionManager] Failed to decrypt SESSION_FILE (gopay_session): ${error.message}`);
@@ -114,7 +160,24 @@ export function loadSession(): GoPaySession | null {
 }
 
 /**
- * Saves and encrypts session data to `gopay_session` (mode 0600)
+ * Persists encrypted session to the database app_sessions table
+ */
+export async function saveSessionToDatabase(payload: GoPaySession): Promise<void> {
+  try {
+    const db = getDatabase();
+    const encryptedEnvelope = encryptPayload(payload);
+    await db.execute({
+      sql: `INSERT OR REPLACE INTO app_sessions (key, data, updated_at) VALUES (?, ?, ?)`,
+      args: [DB_SESSION_KEY, encryptedEnvelope, Date.now()]
+    });
+    logger.info(`[SessionManager] Session successfully encrypted and saved to database (app_sessions)`);
+  } catch (err: any) {
+    logger.warn(`[SessionManager] Could not save session to database: ${err.message}`);
+  }
+}
+
+/**
+ * Saves and encrypts session data to `gopay_session` (mode 0600) and database table
  */
 export function saveSession(
   sessionData: Partial<GoPaySession> & { expires_in?: number }
@@ -139,9 +202,17 @@ export function saveSession(
     expires_at: expiresAt
   };
 
+  memoryCachedSession = payload;
   const encryptedEnvelope = encryptPayload(payload);
-  fs.writeFileSync(SESSION_FILE, encryptedEnvelope, { mode: 0o600, encoding: 'utf-8' });
-  logger.info(`[SessionManager] Session successfully encrypted and saved to ${SESSION_FILE}`);
+
+  try {
+    fs.writeFileSync(SESSION_FILE, encryptedEnvelope, { mode: 0o600, encoding: 'utf-8' });
+    logger.info(`[SessionManager] Session successfully encrypted and saved to ${SESSION_FILE}`);
+  } catch (fileErr: any) {
+    logger.warn(`[SessionManager] Could not write to SESSION_FILE (serverless read-only environment): ${fileErr.message}`);
+  }
+
+  saveSessionToDatabase(payload).catch(() => {});
   return payload;
 }
 
@@ -189,7 +260,7 @@ export function getStandardGoBizHeaders(uniqueId: string = generateUUID()): Reco
 }
 
 export async function refreshSession(): Promise<GoPaySession | null> {
-  const currentSession = loadSession();
+  const currentSession = await loadSessionAsync();
   if (!currentSession || !currentSession.refresh_token) {
     logger.warn('[SessionManager] Auto-refresh skipped: refresh_token not found.');
     return null;
@@ -260,7 +331,7 @@ export async function refreshSession(): Promise<GoPaySession | null> {
 export async function getValidHeaders(
   clientUserAgent: string | null = null
 ): Promise<Record<string, string> | null> {
-  let session = loadSession();
+  let session = await loadSessionAsync();
 
   if (!session || !session.access_token) {
     logger.warn('[SessionManager] WARNING: GoPay session not available. Run `npm run login`.');

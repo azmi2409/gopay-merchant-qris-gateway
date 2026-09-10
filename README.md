@@ -146,6 +146,11 @@ DATABASE_AUTH_TOKEN=
 WEBHOOK_SECRET_KEY=whsec_8e7f6a5b4c3d2e1f0a9b8c7d
 ```
 
+#### Stateless / Serverless Deployments (Turso, Cloudflare, AWS Lambda):
+The gateway automatically stores its encrypted session inside the `app_sessions` table in your database (`DATABASE_URL`).
+- For serverless hosting, set `DATABASE_URL` to your remote LibSQL/Turso URL (e.g. `libsql://your-db.turso.io`) with `DATABASE_AUTH_TOKEN`.
+- The local filesystem is no longer a hard dependency for session persistence; fresh Lambda or container cold starts restore the encrypted session directly from the database.
+
 ---
 
 ### 3. Log In to GoBiz (One-time Setup)

@@ -30,7 +30,7 @@ function startMaintenanceTimers(): void {
   // Periodic auto-refresh of session (every 6 hours)
   refreshTimer = setInterval(async () => {
     try {
-      const session = sessionManager.loadSession();
+      const session = await sessionManager.loadSessionAsync();
       if (session && session.refresh_token) {
         if (sessionManager.isExpired(session)) {
           logActivity('INFO', 'Auto Refresh: Token nearing expiration, refreshing session...');

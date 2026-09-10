@@ -69,6 +69,14 @@ export async function initDatabase(client = getDatabase()): Promise<void> {
   `);
 
   await client.execute(`
+    CREATE TABLE IF NOT EXISTS app_sessions (
+      key TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_qris_status ON qris (status);
   `);
   await client.execute(`
