@@ -32,7 +32,7 @@
             // Populate UI
             document.getElementById('amount-display').textContent = qrisData.formatted_amount;
             document.getElementById('qr-image').src = qrisData.qr_image_url;
-            document.getElementById('payment-card').style.display = 'block';
+            document.getElementById('payment-card').style.removeProperty('display');
 
             document.title = 'QRIS Payment - ' + qrisData.formatted_amount;
 
