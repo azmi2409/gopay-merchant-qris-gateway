@@ -199,7 +199,17 @@ qrisRouter.get('/api/v1/qris/:id/status', async (req: Request, res: Response) =>
       message: 'No payment received yet'
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, paid: false, status: 'PENDING', message: err.message });
+    // Session absence or upstream timeouts during polling return pending status without 500
+    // ponytail: upgrade to explicit upstream error reporting if caller asks for strict auth errors
+    logActivity('WARNING', `QRIS payment polling warning for ${qrisId}: ${err.message}`);
+    res.json({
+      success: true,
+      paid: false,
+      status: 'PENDING',
+      reference: qris.reference,
+      attributes: qris.attributes,
+      message: 'Payment verification pending'
+    });
   }
 });
 
