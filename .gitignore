@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 .pnpm-store/
+data/
+*.db
+*.db-journal
 
 # Production Build & Coverage
 dist/

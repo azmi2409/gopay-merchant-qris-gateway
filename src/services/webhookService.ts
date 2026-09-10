@@ -2,6 +2,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 import { logger } from '../utils/logger';
 import { withRetry } from '../utils/retry';
+import { getDatabase } from '../utils/db';
 
 export interface WebhookRegistration {
   id: string;
@@ -17,9 +18,6 @@ export interface WebhookPayload {
   timestamp: string;
   data: unknown;
 }
-
-// In-memory webhooks store
-export const webhookStore = new Map<string, WebhookRegistration>();
 
 /**
  * Pings the target webhook URL with a verification ping.
@@ -54,43 +52,63 @@ export async function pingWebhookUrl(url: string, secret?: string): Promise<bool
   return response.status >= 200 && response.status < 300;
 }
 
-export function registerWebhook(
+export async function registerWebhook(
   url: string,
   events: string[] = ['payment.success'],
   secret?: string
-): WebhookRegistration {
+): Promise<WebhookRegistration> {
   const id = 'whk_' + Math.random().toString(36).substring(2, 10);
-  const entry: WebhookRegistration = {
+  const createdAt = new Date().toISOString();
+  const normalizedEvents = events.length > 0 ? events : ['payment.success'];
+
+  const db = getDatabase();
+  await db.execute({
+    sql: `INSERT INTO webhooks (id, url, secret, events, created_at) VALUES (?, ?, ?, ?, ?)`,
+    args: [id, url, secret || null, JSON.stringify(normalizedEvents), createdAt]
+  });
+
+  logger.info(`Webhook registered: ${id} -> ${url}`);
+  return {
     id,
     url,
     secret,
-    events: events.length > 0 ? events : ['payment.success'],
-    createdAt: new Date().toISOString()
+    events: normalizedEvents,
+    createdAt
   };
-  webhookStore.set(id, entry);
-  logger.info(`Webhook registered: ${id} -> ${url}`);
-  return entry;
 }
 
-export function removeWebhook(id: string): boolean {
-  return webhookStore.delete(id);
+export async function removeWebhook(id: string): Promise<boolean> {
+  const db = getDatabase();
+  const res = await db.execute({
+    sql: `DELETE FROM webhooks WHERE id = ?`,
+    args: [id]
+  });
+  return res.rowsAffected > 0;
 }
 
-export function listWebhooks(): WebhookRegistration[] {
-  return Array.from(webhookStore.values());
+export async function listWebhooks(): Promise<WebhookRegistration[]> {
+  const db = getDatabase();
+  const res = await db.execute(`SELECT * FROM webhooks ORDER BY created_at DESC`);
+  return res.rows.map((row: any) => ({
+    id: String(row.id),
+    url: String(row.url),
+    secret: row.secret ? String(row.secret) : undefined,
+    events: JSON.parse(String(row.events)),
+    createdAt: String(row.created_at)
+  }));
 }
 
-export function clearWebhooks(): void {
-  webhookStore.clear();
+export async function clearWebhooks(): Promise<void> {
+  const db = getDatabase();
+  await db.execute(`DELETE FROM webhooks`);
 }
 
 /**
  * Dispatches an event payload asynchronously to all matching webhooks with HMAC-SHA256 signature
  */
 export async function dispatchWebhookEvent(event: string, data: unknown): Promise<void> {
-  const matching = Array.from(webhookStore.values()).filter(
-    (wh) => wh.events.includes('*') || wh.events.includes(event)
-  );
+  const allHooks = await listWebhooks();
+  const matching = allHooks.filter((wh) => wh.events.includes('*') || wh.events.includes(event));
 
   if (matching.length === 0) return;
 
@@ -115,7 +133,6 @@ export async function dispatchWebhookEvent(event: string, data: unknown): Promis
       headers['X-Webhook-Signature'] = `sha256=${hmac}`;
     }
 
-    // Fire dispatch asynchronously with backoff retry
     withRetry(
       () =>
         axios.post(wh.url, body, {

@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app';
+import { initDatabase } from '../src/utils/db';
 import {
   clearWebhooks,
   registerWebhook,
@@ -12,8 +13,13 @@ import axios from 'axios';
 vi.mock('axios');
 
 describe('Webhook Service & REST API', () => {
-  beforeEach(() => {
-    clearWebhooks();
+  beforeAll(async () => {
+    process.env.DATABASE_URL = 'file::memory:';
+    await initDatabase();
+  });
+
+  beforeEach(async () => {
+    await clearWebhooks();
     vi.clearAllMocks();
     process.env.API_KEY = 'test-secret-key-123';
   });
@@ -50,7 +56,7 @@ describe('Webhook Service & REST API', () => {
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
       expect(res.body.message).toContain('Webhook validation failed');
-      expect(listWebhooks().length).toBe(0);
+      expect((await listWebhooks()).length).toBe(0);
     });
 
     it('POST /api/v1/webhooks pings and saves when ping returns 200', async () => {
@@ -92,7 +98,7 @@ describe('Webhook Service & REST API', () => {
         .delete(`/api/v1/webhooks/${res.body.data.id}`)
         .set('x-api-key', 'test-secret-key-123');
       expect(deleteRes.status).toBe(200);
-      expect(listWebhooks().length).toBe(0);
+      expect((await listWebhooks()).length).toBe(0);
     });
   });
 
@@ -100,7 +106,7 @@ describe('Webhook Service & REST API', () => {
     it('dispatches webhook event with sha256 HMAC signature', async () => {
       vi.mocked(axios.post).mockResolvedValue({ status: 200, data: {} });
 
-      registerWebhook('https://merchant.example.com/hook', ['payment.success'], 'my_secret_key');
+      await registerWebhook('https://merchant.example.com/hook', ['payment.success'], 'my_secret_key');
 
       await dispatchWebhookEvent('payment.success', { amount: 50000, transaction_id: 'TRX123' });
 
@@ -119,7 +125,7 @@ describe('Webhook Service & REST API', () => {
     it('ignores webhooks not subscribed to the event', async () => {
       vi.mocked(axios.post).mockResolvedValue({ status: 200, data: {} });
 
-      registerWebhook('https://merchant.example.com/other', ['order.refund']);
+      await registerWebhook('https://merchant.example.com/other', ['order.refund']);
 
       await dispatchWebhookEvent('payment.success', { amount: 50000 });
 

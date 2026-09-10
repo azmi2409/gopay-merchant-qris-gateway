@@ -6,6 +6,8 @@ GoPay Merchant & Dynamic QRIS Payment Gateway API (REST v1) built with TypeScrip
 
 - **100% TypeScript**: Type-safe end-to-end, modular architecture with DTOs and schemas.
 - **Strict RESTful API (`/api/v1`)**: Clean REST design without legacy endpoints.
+- **Embedded & Cloudflare SQLite Database**: Backed by `@libsql/client` supporting local SQLite (`file:data/gateway.db`), Cloudflare Workers / D1 compatibility, or remote Turso instances.
+- **Embeddable Metadata**: Attach custom `reference` (e.g. order ID, invoice) and arbitrary JSON `attributes` to any QRIS creation request.
 - **Webhooks with Pre-Flight Ping & HMAC**: Real-time event notifications with HMAC-SHA256 signature and destination reachability validation.
 - **Configurable Backoff & Retry**: Resilient network calls against GoBiz and GoJek endpoints with automatic retry on transient failures.
 - **Dynamic QRIS EMVCo Generator**: Automatic CRC16 calculation, TLV Tag 01 manipulation (Dynamic), and Tag 54 injection (Amount).
@@ -53,6 +55,11 @@ API_KEY=your_secret_api_key
 QRIS_STATIC=00020101021126610014COM.GO-JEK.WWW...
 GOPAY_MERCHANT_ID=your_merchant_id
 GOPAY_MASTER_KEY= # Optional: if empty, auto-generated to gopay.key (chmod 0600)
+
+# Database (LibSQL / SQLite / Cloudflare SQLite / Turso)
+# Default local file: file:data/gateway.db
+DATABASE_URL=
+DATABASE_AUTH_TOKEN=
 ```
 
 ### 3. Startup & Encrypted Session
@@ -94,8 +101,8 @@ Listens on `http://localhost:4000` and logs all incoming headers, payloads, and 
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `POST` | `/api/v1/qris` | API Key (`x-api-key`) | Create dynamic QRIS (`{ "amount": 50000 }`) |
-| `GET` | `/api/v1/qris/:id` | Public | QRIS metadata and amount payload |
+| `POST` | `/api/v1/qris` | API Key (`x-api-key`) | Create dynamic QRIS (`{ "amount": 50000, "reference": "INV-001", "attributes": { ... } }`) |
+| `GET` | `/api/v1/qris/:id` | Public | QRIS metadata, reference, attributes, and amount payload |
 | `GET` | `/api/v1/qris/:id/status` | Public | Real-time payment verification status |
 | `GET` | `/qr/:id` | Public | Interactive customer payment landing page |
 | `POST` | `/api/v1/payments/verify` | API Key (`x-api-key`) | Verify settlement mutation manually |

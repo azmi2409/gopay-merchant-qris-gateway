@@ -20,6 +20,8 @@ export interface QRISRecord {
   trxId?: string;
   amount: number;
   data: string;
+  reference?: string | null;
+  attributes?: Record<string, unknown> | null;
   createdAt: Date;
   expiresAt: Date;
   status: QRISStatus;

@@ -3,7 +3,10 @@ import path from 'path';
 import { apiKeyAuth } from '../middlewares/auth';
 import { generateDynamicQRIS } from '../utils/qris';
 import {
-  qrisStore,
+  saveQRISRecord,
+  getQRISRecord,
+  updateQRISStatus,
+  deleteQRISRecord,
   QRIS_EXPIRY_MS,
   logActivity,
   verifyPayment
@@ -17,8 +20,11 @@ function getParamId(param: string | string[] | undefined): string {
 }
 
 // POST /api/v1/qris
-qrisRouter.post('/api/v1/qris', apiKeyAuth, (req: Request, res: Response) => {
+qrisRouter.post('/api/v1/qris', apiKeyAuth, async (req: Request, res: Response) => {
   const amountParam = req.body?.amount ?? req.query?.amount;
+  const reference = req.body?.reference ?? req.query?.reference ?? null;
+  const attributes = req.body?.attributes ?? null;
+
   if (!amountParam || isNaN(Number(amountParam)) || Number(amountParam) <= 0) {
     res.status(400).json({
       success: false,
@@ -51,11 +57,13 @@ qrisRouter.post('/api/v1/qris', apiKeyAuth, (req: Request, res: Response) => {
   const expiresAt = new Date(Date.now() + QRIS_EXPIRY_MS);
   const createdAt = new Date();
 
-  qrisStore.set(qrisId, {
+  await saveQRISRecord({
     id: qrisId,
     data: dynamicCode,
     amount,
     trxId,
+    reference: reference ? String(reference) : null,
+    attributes: typeof attributes === 'object' && attributes !== null ? attributes : null,
     expiresAt,
     createdAt,
     status: 'PENDING'
@@ -72,6 +80,8 @@ qrisRouter.post('/api/v1/qris', apiKeyAuth, (req: Request, res: Response) => {
     data: {
       qris_id: qrisId,
       trx_id: trxId,
+      reference: reference ? String(reference) : null,
+      attributes: typeof attributes === 'object' && attributes !== null ? attributes : null,
       qris_url: publicUrl,
       qris_code: dynamicCode,
       amount,
@@ -82,9 +92,9 @@ qrisRouter.post('/api/v1/qris', apiKeyAuth, (req: Request, res: Response) => {
 });
 
 // GET /api/v1/qris/:id
-qrisRouter.get('/api/v1/qris/:id', (req: Request, res: Response) => {
+qrisRouter.get('/api/v1/qris/:id', async (req: Request, res: Response) => {
   const id = getParamId(req.params.id);
-  const qris = qrisStore.get(id);
+  const qris = await getQRISRecord(id);
   if (!qris) {
     res.status(404).json({ success: false, status: 'NOT_FOUND', message: 'QRIS not found' });
     return;
@@ -105,6 +115,8 @@ qrisRouter.get('/api/v1/qris/:id', (req: Request, res: Response) => {
     data: {
       qris_id: id,
       trx_id: qris.trxId,
+      reference: qris.reference,
+      attributes: qris.attributes,
       amount: qris.amount,
       formatted_amount: formattedAmount,
       qr_image_url: qrImageUrl,
@@ -121,19 +133,26 @@ qrisRouter.get('/api/v1/qris/:id', (req: Request, res: Response) => {
 // GET /api/v1/qris/:id/status
 qrisRouter.get('/api/v1/qris/:id/status', async (req: Request, res: Response) => {
   const qrisId = getParamId(req.params.id);
-  const qris = qrisStore.get(qrisId);
+  const qris = await getQRISRecord(qrisId);
   if (!qris) {
     res.status(404).json({ success: false, status: 'NOT_FOUND', message: 'QRIS not found' });
     return;
   }
 
   if (qris.status === 'PAID') {
-    res.json({ success: true, paid: true, status: 'PAID', transaction: qris.transaction });
+    res.json({
+      success: true,
+      paid: true,
+      status: 'PAID',
+      reference: qris.reference,
+      attributes: qris.attributes,
+      transaction: qris.transaction
+    });
     return;
   }
 
   if (Date.now() > qris.expiresAt.getTime()) {
-    qrisStore.delete(qrisId);
+    await deleteQRISRecord(qrisId);
     res.status(410).json({
       success: false,
       paid: false,
@@ -155,14 +174,19 @@ qrisRouter.get('/api/v1/qris/:id/status', async (req: Request, res: Response) =>
     );
 
     if (matched) {
-      qris.status = 'PAID';
-      qris.transaction = matched;
-      qrisStore.set(qrisId, qris);
+      await updateQRISStatus(qrisId, 'PAID', matched);
       logActivity(
         'SUCCESS',
         `QRIS payment ID ${qrisId} verified for amount Rp ${qris.amount}`
       );
-      res.json({ success: true, paid: true, status: 'PAID', transaction: matched });
+      res.json({
+        success: true,
+        paid: true,
+        status: 'PAID',
+        reference: qris.reference,
+        attributes: qris.attributes,
+        transaction: matched
+      });
       return;
     }
 
@@ -170,6 +194,8 @@ qrisRouter.get('/api/v1/qris/:id/status', async (req: Request, res: Response) =>
       success: true,
       paid: false,
       status: 'PENDING',
+      reference: qris.reference,
+      attributes: qris.attributes,
       message: 'No payment received yet'
     });
   } catch (err: any) {
@@ -178,9 +204,9 @@ qrisRouter.get('/api/v1/qris/:id/status', async (req: Request, res: Response) =>
 });
 
 // GET /qr/:id (Customer payment landing page)
-qrisRouter.get('/qr/:id', (req: Request, res: Response) => {
+qrisRouter.get('/qr/:id', async (req: Request, res: Response) => {
   const id = getParamId(req.params.id);
-  const qris = qrisStore.get(id);
+  const qris = await getQRISRecord(id);
   if (!qris) {
     res
       .status(404)
@@ -192,7 +218,7 @@ qrisRouter.get('/qr/:id', (req: Request, res: Response) => {
 
   if (req.query.format === 'raw' || req.query.raw === '1') {
     if (Date.now() > qris.expiresAt.getTime()) {
-      qrisStore.delete(id);
+      await deleteQRISRecord(id);
       res.status(410).send('QRIS Expired');
       return;
     }

@@ -3,6 +3,7 @@ import * as sessionManager from './sessionManager';
 import { logger } from '../utils/logger';
 import { withRetry } from '../utils/retry';
 import { dispatchWebhookEvent } from './webhookService';
+import { getDatabase } from '../utils/db';
 import {
   ActivityLog,
   ClaimedTransactionRecord,
@@ -17,9 +18,6 @@ export const MAX_LOGS = 100;
 export const CLAIMED_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const QRIS_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
-// In-memory stores
-export const claimedTransactions = new Map<string, ClaimedTransactionRecord>();
-export const qrisStore = new Map<string, QRISRecord>();
 export const activityLogs: ActivityLog[] = [];
 
 /**
@@ -39,30 +37,116 @@ export function logActivity(
   logger.log(type, message, details);
 }
 
-/**
- * Clean up expired claimed transactions to prevent memory leak
- */
-export function cleanExpiredTransactions(now = Date.now()): number {
-  let cleaned = 0;
-  for (const [txId, claim] of claimedTransactions.entries()) {
-    if (now - claim.claimedAt > CLAIMED_CLEANUP_INTERVAL_MS) {
-      claimedTransactions.delete(txId);
-      cleaned++;
-    }
-  }
-  return cleaned;
+// ── DB Helpers for QRIS ──
+
+export async function saveQRISRecord(qris: QRISRecord): Promise<void> {
+  const db = getDatabase();
+  await db.execute({
+    sql: `INSERT OR REPLACE INTO qris (id, trx_id, amount, data, reference, attributes, created_at, expires_at, status, transaction_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      qris.id,
+      qris.trxId || null,
+      qris.amount,
+      qris.data,
+      qris.reference || null,
+      qris.attributes ? JSON.stringify(qris.attributes) : null,
+      qris.createdAt.toISOString(),
+      qris.expiresAt.toISOString(),
+      qris.status,
+      qris.transaction ? JSON.stringify(qris.transaction) : null
+    ]
+  });
+}
+
+export async function getQRISRecord(id: string): Promise<QRISRecord | null> {
+  const db = getDatabase();
+  const res = await db.execute({
+    sql: `SELECT * FROM qris WHERE id = ?`,
+    args: [id]
+  });
+
+  if (res.rows.length === 0) return null;
+  const row: any = res.rows[0];
+
+  return {
+    id: String(row.id),
+    trxId: row.trx_id ? String(row.trx_id) : undefined,
+    amount: Number(row.amount),
+    data: String(row.data),
+    reference: row.reference ? String(row.reference) : null,
+    attributes: row.attributes ? JSON.parse(String(row.attributes)) : null,
+    createdAt: new Date(String(row.created_at)),
+    expiresAt: new Date(String(row.expires_at)),
+    status: row.status as QRISRecord['status'],
+    transaction: row.transaction_json ? JSON.parse(String(row.transaction_json)) : null
+  };
+}
+
+export async function updateQRISStatus(
+  id: string,
+  status: QRISRecord['status'],
+  transaction?: VerifiedPayment | null
+): Promise<void> {
+  const db = getDatabase();
+  await db.execute({
+    sql: `UPDATE qris SET status = ?, transaction_json = ? WHERE id = ?`,
+    args: [status, transaction ? JSON.stringify(transaction) : null, id]
+  });
+}
+
+export async function deleteQRISRecord(id: string): Promise<void> {
+  const db = getDatabase();
+  await db.execute({
+    sql: `DELETE FROM qris WHERE id = ?`,
+    args: [id]
+  });
+}
+
+// ── DB Helpers for Claimed Transactions ──
+
+export async function getClaimedTransaction(txId: string): Promise<ClaimedTransactionRecord | null> {
+  const db = getDatabase();
+  const res = await db.execute({
+    sql: `SELECT * FROM claimed_transactions WHERE tx_id = ?`,
+    args: [txId]
+  });
+  if (res.rows.length === 0) return null;
+  const row: any = res.rows[0];
+  return {
+    qrisId: row.qris_id ? String(row.qris_id) : null,
+    claimedAt: Number(row.claimed_at)
+  };
+}
+
+export async function setClaimedTransaction(txId: string, qrisId: string | null, claimedAt = Date.now()): Promise<void> {
+  const db = getDatabase();
+  await db.execute({
+    sql: `INSERT OR REPLACE INTO claimed_transactions (tx_id, qris_id, claimed_at) VALUES (?, ?, ?)`,
+    args: [txId, qrisId, claimedAt]
+  });
+}
+
+export async function cleanExpiredTransactions(now = Date.now()): Promise<number> {
+  const db = getDatabase();
+  const threshold = now - CLAIMED_CLEANUP_INTERVAL_MS;
+  const res = await db.execute({
+    sql: `DELETE FROM claimed_transactions WHERE claimed_at < ?`,
+    args: [threshold]
+  });
+  return res.rowsAffected;
 }
 
 /**
  * Pure helper function to match a raw GoPay transaction against a target amount and timestamp,
  * handling GoPay's x100 sen currency scaling and double-claim prevention.
  */
-export function matchTransaction(
+export async function matchTransaction(
   rawTransactions: GoPayRawTransaction[],
   targetAmount: number,
   filterStartTimeMs: number,
   qrisId?: string | null
-): VerifiedPayment | null {
+): Promise<VerifiedPayment | null> {
   for (const tx of rawTransactions) {
     let rawAmount = 0;
     if (typeof tx.gross_amount !== 'undefined') {
@@ -78,7 +162,6 @@ export function matchTransaction(
     if (isNaN(rawAmount)) continue;
 
     // GoPay merchant-analytics/v2 returns gross_amount in sen (x100)
-    // E.g. Rp 50.000 is represented as 5000000.
     const isAmountMatch =
       rawAmount === targetAmount ||
       rawAmount === targetAmount * 100 ||
@@ -92,16 +175,13 @@ export function matchTransaction(
     if (!txId) continue;
 
     if (isAmountMatch && txTimestamp >= filterStartTimeMs) {
-      const existingClaim = claimedTransactions.get(txId);
+      const existingClaim = await getClaimedTransaction(txId);
 
       if (
         !existingClaim ||
         (qrisId && (existingClaim.qrisId === qrisId || existingClaim.qrisId === null))
       ) {
-        claimedTransactions.set(txId, {
-          qrisId: qrisId || existingClaim?.qrisId || null,
-          claimedAt: Date.now()
-        });
+        await setClaimedTransaction(txId, qrisId || existingClaim?.qrisId || null, Date.now());
 
         const displayAmount =
           rawAmount % 100 === 0 && rawAmount >= 100000 ? rawAmount / 100 : rawAmount;
@@ -130,7 +210,6 @@ export function matchTransaction(
           transaction_time: String(tx.transaction_time || tx.settlement_time || '')
         };
       } else {
-        // Already claimed by another QRIS
         continue;
       }
     }
@@ -208,7 +287,7 @@ export async function verifyPayment(
   const targetAmount = typeof amount === 'number' ? amount : parseInt(amount, 10);
   const filterStartTimeMs = startTime ? new Date(startTime).getTime() - 60 * 1000 : 0;
 
-  const matched = matchTransaction(rawTransactions, targetAmount, filterStartTimeMs, qrisId);
+  const matched = await matchTransaction(rawTransactions, targetAmount, filterStartTimeMs, qrisId);
 
   if (matched) {
     logActivity('INFO', `TRX ${matched.transaction_id} claimed by QRIS ${qrisId || 'manual'}`);

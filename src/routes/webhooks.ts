@@ -34,7 +34,7 @@ webhookRouter.post('/api/v1/webhooks', apiKeyAuth, async (req: Request, res: Res
     return;
   }
 
-  const registered = registerWebhook(
+  const registered = await registerWebhook(
     url,
     Array.isArray(events) ? events : ['payment.success'],
     secret
@@ -47,17 +47,18 @@ webhookRouter.post('/api/v1/webhooks', apiKeyAuth, async (req: Request, res: Res
 });
 
 // GET /api/v1/webhooks - List all registered webhooks
-webhookRouter.get('/api/v1/webhooks', apiKeyAuth, (_req: Request, res: Response) => {
+webhookRouter.get('/api/v1/webhooks', apiKeyAuth, async (_req: Request, res: Response) => {
+  const hooks = await listWebhooks();
   res.json({
     success: true,
-    data: listWebhooks()
+    data: hooks
   });
 });
 
 // DELETE /api/v1/webhooks/:id - Delete webhook
-webhookRouter.delete('/api/v1/webhooks/:id', apiKeyAuth, (req: Request, res: Response) => {
+webhookRouter.delete('/api/v1/webhooks/:id', apiKeyAuth, async (req: Request, res: Response) => {
   const webhookId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const deleted = removeWebhook(webhookId);
+  const deleted = await removeWebhook(webhookId);
   if (!deleted) {
     res.status(404).json({
       success: false,
