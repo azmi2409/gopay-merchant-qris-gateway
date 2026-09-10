@@ -107,29 +107,29 @@ Gojek access tokens typically expire in 24 hours. `sessionManager.ts` implements
 
 ```mermaid
 flowchart TD
-    A[Incoming Request to Gateway<br/>e.g.: GET /api/v1/transactions] --> B[Invoke sessionManager.getValidHeaders()]
-    B --> C[loadSession() decrypts gopay_session]
+    A["Incoming Request to Gateway<br/>e.g.: GET /api/v1/transactions"] --> B["Invoke sessionManager.getValidHeaders()"]
+    B --> C["loadSession() decrypts gopay_session"]
     
-    C --> D{Session & access_token exist?}
-    D -- No --> E[Return null -> Response 400: Run pnpm login]
-    D -- Yes --> F{isExpired(session)?<br/>now >= expires_at - 5 minutes}
+    C --> D{"Session & access_token exist?"}
+    D -- No --> E["Return null -> Response 400: Run pnpm login"]
+    D -- Yes --> F{"isExpired(session)?<br/>now >= expires_at - 5 minutes"}
     
-    F -- Valid --> G[Construct Bearer Auth Headers & Cookies]
-    F -- Expired --> H{Does refresh_token exist?}
+    F -- Valid --> G["Construct Bearer Auth Headers & Cookies"]
+    F -- Expired --> H{"Does refresh_token exist?"}
     
     H -- No --> G
-    H -- Yes --> I[refreshSession() with backoff retry]
+    H -- Yes --> I["refreshSession() with backoff retry"]
     
-    I --> J[POST https://api.gobiz.co.id/goid/token<br/>grant_type: 'refresh_token']
-    J --> K{Refresh Succeeded?}
-    K -- Yes --> L[Update access_token & expires_at in gopay_session]
+    I --> J["POST https://api.gobiz.co.id/goid/token<br/>grant_type: refresh_token"]
+    J --> K{"Refresh Succeeded?"}
+    K -- Yes --> L["Update access_token & expires_at in gopay_session"]
     L --> G
     K -- Failed --> G
     
-    G --> M[Send Request with withRetry() to Gojek API]
-    M --> N{HTTP 401 Unauthorized?}
-    N -- No --> O[Return Transaction Response]
-    N -- Yes --> P[Emergency Auto-Refresh & Retry Request]
+    G --> M["Send Request with withRetry() to Gojek API"]
+    M --> N{"HTTP 401 Unauthorized?"}
+    N -- No --> O["Return Transaction Response"]
+    N -- Yes --> P["Emergency Auto-Refresh & Retry Request"]
     P --> O
 ```
 
