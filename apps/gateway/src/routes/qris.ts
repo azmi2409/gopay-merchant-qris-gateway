@@ -25,7 +25,8 @@ qrisRouter.post('/api/v1/qris', apiKeyAuth, async (req: Request, res: Response) 
       amount: req.body?.amount ?? req.query?.amount,
       reference: req.body?.reference ?? req.query?.reference,
       attributes: req.body?.attributes,
-      callbackUrl: req.body?.callback_url ?? req.query?.callback_url
+      callbackUrl: req.body?.callback_url ?? req.query?.callback_url,
+      useUniqueCode: req.body?.use_unique_code ?? req.query?.use_unique_code
     }, `${req.protocol}://${req.get('host')}`);
     res.status(201).json({ success: true, data });
   } catch (error) {
@@ -68,6 +69,8 @@ qrisRouter.get('/api/v1/qris/:id', async (req: Request, res: Response) => {
       attributes: qris.attributes,
       callback_url: qris.callbackUrl,
       amount: qris.amount,
+      base_amount: qris.baseAmount,
+      unique_code: qris.uniqueCode,
       formatted_amount: formattedAmount,
       qr_image_url: qrImageUrl,
       qris_code: qris.data,

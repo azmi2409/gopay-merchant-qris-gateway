@@ -57,6 +57,12 @@ export async function initDatabase(client = getDatabase()): Promise<void> {
     if (!String(error.message).includes('duplicate column name')) throw error;
   }
 
+  try {
+    await client.execute('ALTER TABLE qris ADD COLUMN unique_code INTEGER NOT NULL DEFAULT 0');
+  } catch (error: any) {
+    if (!String(error.message).includes('duplicate column name')) throw error;
+  }
+
   await client.execute(`
     CREATE TABLE IF NOT EXISTS claimed_transactions (
       tx_id TEXT PRIMARY KEY,

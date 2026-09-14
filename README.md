@@ -174,6 +174,24 @@ The gateway automatically stores its encrypted session inside the `app_sessions`
 
 ### 3. Complete Browser Setup
 
+GoBiz setup saves the original device ID inside the encrypted session and reuses it
+for token refresh. Older sessions without a device ID require reconnecting GoBiz.
+
+#### Unique payment amounts
+
+Send `{"amount":50000,"use_unique_code":true}` to `POST /api/v1/qris`, or enable
+the unique-code checkbox in the admin generator. This adds Rp 1-999 (for example,
+Rp 50,123), rather than concatenating digits. The option defaults to false.
+Amounts must be positive whole rupiah, at most `Number.MAX_SAFE_INTEGER - 999`.
+Boolean flags also accept `1`, `0`, `"true"`, `"false"`, `"1"`, and `"0"`.
+
+Creation and detail responses include `base_amount`, `unique_code`, and payable
+`amount`. Customers must pay `amount` exactly; QR generation and automatic
+verification use that total. Allocation uses a database write transaction to avoid
+duplicate totals among unexpired QRIS, including paid records. Exhausted codes or
+an exact-amount request conflicting with a reserved total return HTTP 409.
+Codes can be reused after expiry; they do not replace transaction-ID matching.
+
 1. Start both services with `docker compose up -d --build`.
 2. Open `http://localhost:3100/admin/` and sign in with `ADMIN_PASSWORD`.
 3. Open **Gateway setup**, save the static merchant QRIS and optional merchant ID.

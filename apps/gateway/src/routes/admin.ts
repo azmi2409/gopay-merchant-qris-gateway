@@ -36,7 +36,8 @@ adminRouter.post('/internal/admin/qris', async (req: Request, res: Response) => 
     const data = await createQris({
       amount: req.body?.amount,
       reference: req.body?.reference,
-      callbackUrl: req.body?.callback_url
+      callbackUrl: req.body?.callback_url,
+      useUniqueCode: req.body?.use_unique_code ?? req.query?.use_unique_code
     }, process.env.PUBLIC_GATEWAY_URL || 'http://localhost:3000');
     res.status(201).json({ success: true, data });
   } catch (error) {

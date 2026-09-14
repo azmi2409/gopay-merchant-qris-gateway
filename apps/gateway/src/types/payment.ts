@@ -16,6 +16,8 @@ export interface ClaimedTransactionRecord {
 }
 
 export interface QRISRecord {
+  baseAmount?: number;
+  uniqueCode?: number;
   id: string;
   trxId?: string;
   amount: number;

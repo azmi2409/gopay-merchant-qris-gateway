@@ -145,9 +145,64 @@ describe('API Gateway REST v1 Integration Tests', () => {
         .post('/api/v1/qris')
         .set('x-api-key', 'test-secret-key-123')
         .send({ amount: 25000 });
-
       expect(res.status).toBe(201);
       expect(res.body.data.callback_url).toBeNull();
+    });
+
+    it('POST /api/v1/qris with use_unique_code appends small unique code to amount', async () => {
+      const res = await request(app)
+        .post('/api/v1/qris')
+        .set('x-api-key', 'test-secret-key-123')
+        .send({ amount: 50000, use_unique_code: true });
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.base_amount).toBe(50000);
+      expect(res.body.data.unique_code).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.unique_code).toBeLessThanOrEqual(999);
+      expect(res.body.data.amount).toBe(50000 + res.body.data.unique_code);
+      expect(res.body.data.qris_code).toContain(String(res.body.data.amount));
+      const loaded = await request(app).get(`/api/v1/qris/${res.body.data.qris_id}`);
+      expect(loaded.body.data.base_amount).toBe(50000);
+      expect(loaded.body.data.unique_code).toBe(res.body.data.unique_code);
+      const next = await request(app).post('/api/v1/qris')
+        .set('x-api-key', 'test-secret-key-123')
+        .send({ amount: 50000, use_unique_code: true });
+      expect(next.status).toBe(201);
+      expect(next.body.data.amount).not.toBe(res.body.data.amount);
+      const collision = await request(app).post('/api/v1/qris')
+        .set('x-api-key', 'test-secret-key-123')
+        .send({ amount: res.body.data.amount });
+      expect(collision.status).toBe(409);
+    });
+
+    it.each([0.5, 1.5, true, [], 'Infinity', Number.MAX_SAFE_INTEGER])('rejects invalid rupiah amount %j', async amount => {
+      const res = await request(app).post('/api/v1/qris')
+        .set('x-api-key', 'test-secret-key-123').send({ amount });
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects invalid unique-code flags', async () => {
+      const res = await request(app).post('/api/v1/qris')
+        .set('x-api-key', 'test-secret-key-123').send({ amount: 50000, use_unique_code: 'yes' });
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects exhausted codes and releases expired amounts', async () => {
+      const { getDatabase } = await import('../src/utils/db');
+      const db = getDatabase();
+      await db.execute({
+        sql: `WITH RECURSIVE codes(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM codes WHERE n < 999)
+          INSERT INTO qris (id, amount, data, created_at, expires_at, status)
+          SELECT 'exhaust-' || n, 70000 + n, 'synthetic', ?, ?, 'PENDING' FROM codes`,
+        args: [new Date().toISOString(), new Date(Date.now() + 300000).toISOString()]
+      });
+      const create = () => request(app).post('/api/v1/qris')
+        .set('x-api-key', 'test-secret-key-123').send({ amount: 70000, use_unique_code: true });
+      expect((await create()).status).toBe(409);
+      await db.execute("UPDATE qris SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = 'exhaust-123'");
+      const available = await create();
+      expect(available.status).toBe(201);
+      expect(available.body.data.amount).toBe(70123);
     });
 
     it('GET /api/v1/qris/:id returns 404 for nonexistent id', async () => {

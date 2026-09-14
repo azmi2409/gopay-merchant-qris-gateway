@@ -28,6 +28,7 @@
   let generateAmount = $state('');
   let generateReference = $state('');
   let generateCallback = $state('');
+  let generateUseUniqueCode = $state(false);
   let generateMessage = $state('');
   let isGenerating = $state(false);
   let generatedQris = $state<any>(null);
@@ -264,7 +265,8 @@
         body: JSON.stringify({
           amount: generateAmount,
           reference: generateReference,
-          callback_url: generateCallback
+          callback_url: generateCallback,
+          use_unique_code: generateUseUniqueCode
         })
       });
       generatedQris = data;
@@ -649,6 +651,18 @@
               />
             </div>
 
+            <div class="flex items-center gap-2 pt-1">
+              <input
+                id="gen-unique"
+                type="checkbox"
+                bind:checked={generateUseUniqueCode}
+                class="rounded bg-neutral-950 border-neutral-800 text-emerald-500 focus:ring-emerald-500 w-4 h-4"
+              />
+              <label for="gen-unique" class="text-xs text-neutral-300 select-none cursor-pointer">
+                Tambahkan kode unik acak (1-999) di belakang nominal transaksi
+              </label>
+            </div>
+
             {#if generateMessage}
               <div class="p-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-emerald-400">
                 {generateMessage}
@@ -682,6 +696,16 @@
                   <span class="text-neutral-500">ID Transaksi</span>
                   <span class="text-neutral-200">{generatedQris.trx_id}</span>
                 </div>
+                {#if generatedQris.unique_code}
+                  <div class="flex justify-between">
+                    <span class="text-neutral-500">Nominal Pokok</span>
+                    <span class="text-neutral-200">{money(generatedQris.base_amount)}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-neutral-500">Kode Unik</span>
+                    <span class="text-amber-400 font-bold">+{generatedQris.unique_code}</span>
+                  </div>
+                {/if}
                 <div class="flex justify-between">
                   <span class="text-neutral-500">Berlaku Sampai</span>
                   <span class="text-neutral-200">{new Date(generatedQris.expires_at).toLocaleTimeString('id-ID')}</span>

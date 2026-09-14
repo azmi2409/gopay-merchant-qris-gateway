@@ -44,11 +44,10 @@ export function logActivity(
 
 // ── DB Helpers for QRIS ──
 
-export async function saveQRISRecord(qris: QRISRecord): Promise<void> {
-  const db = getDatabase();
+export async function saveQRISRecord(qris: QRISRecord, db: Pick<ReturnType<typeof getDatabase>, 'execute'> = getDatabase()): Promise<void> {
   await db.execute({
-    sql: `INSERT OR REPLACE INTO qris (id, trx_id, amount, data, reference, attributes, callback_url, created_at, expires_at, status, transaction_json)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO qris (id, trx_id, amount, data, reference, attributes, callback_url, created_at, expires_at, status, transaction_json, unique_code)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       qris.id,
       qris.trxId || null,
@@ -60,7 +59,8 @@ export async function saveQRISRecord(qris: QRISRecord): Promise<void> {
       qris.createdAt.toISOString(),
       qris.expiresAt.toISOString(),
       qris.status,
-      qris.transaction ? JSON.stringify(qris.transaction) : null
+      qris.transaction ? JSON.stringify(qris.transaction) : null,
+      qris.uniqueCode || 0
     ]
   });
 }
@@ -79,6 +79,8 @@ export async function getQRISRecord(id: string): Promise<QRISRecord | null> {
     id: String(row.id),
     trxId: row.trx_id ? String(row.trx_id) : undefined,
     amount: Number(row.amount),
+    baseAmount: Number(row.amount) - Number(row.unique_code || 0),
+    uniqueCode: Number(row.unique_code || 0),
     data: String(row.data),
     reference: row.reference ? String(row.reference) : null,
     attributes: row.attributes ? JSON.parse(String(row.attributes)) : null,
