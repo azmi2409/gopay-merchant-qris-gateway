@@ -191,6 +191,7 @@ export function saveSession(
     phone_number: sessionData.phone_number || null,
     merchant_id: sessionData.merchant_id || null,
     outlet_name: sessionData.outlet_name || null,
+    device_id: sessionData.device_id || null,
     access_token: sessionData.access_token || null,
     refresh_token: sessionData.refresh_token || null,
     cookie:
@@ -273,7 +274,11 @@ export async function refreshSession(): Promise<GoPaySession | null> {
     if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.slice(1);
   }
 
-  const headers = getStandardGoBizHeaders();
+  if (typeof currentSession.device_id !== 'string' || !currentSession.device_id.trim()) {
+    logger.warn('[SessionManager] Auto-refresh skipped: original device ID missing. Reconnect GoBiz in the admin panel.');
+    return null;
+  }
+  const headers = getStandardGoBizHeaders(currentSession.device_id);
   const requestBody = {
     client_id: 'go-biz-web-new',
     grant_type: 'refresh_token',
@@ -309,6 +314,7 @@ export async function refreshSession(): Promise<GoPaySession | null> {
       phone_number: currentSession.phone_number,
       merchant_id: currentSession.merchant_id,
       outlet_name: currentSession.outlet_name,
+      device_id: currentSession.device_id,
       access_token: newAccessToken,
       refresh_token: newRefreshToken,
       cookie: `access_token=${newAccessToken}; refresh_token=${newRefreshToken}; auth_method=goid`,

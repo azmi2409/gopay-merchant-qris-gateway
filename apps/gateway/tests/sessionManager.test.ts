@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
+import axios from 'axios';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
 import fs from 'fs';
 import {
   isExpired,
@@ -7,6 +8,7 @@ import {
   loadSession,
   loadSessionAsync,
   saveSession,
+  refreshSession,
   SESSION_FILE,
   LEGACY_SESSION_FILE,
   DB_SESSION_KEY
@@ -75,6 +77,7 @@ describe('UUID and Header Generation', () => {
 
 describe('Encrypted Session Persistence (gopay_session)', () => {
   let backupSession: string | null = null;
+  beforeAll(async () => { await initDatabase(); });
 
   beforeEach(() => {
     if (fs.existsSync(SESSION_FILE)) {
@@ -83,6 +86,7 @@ describe('Encrypted Session Persistence (gopay_session)', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     if (backupSession !== null) {
       fs.writeFileSync(SESSION_FILE, backupSession, 'utf-8');
     } else if (fs.existsSync(SESSION_FILE)) {
@@ -95,6 +99,7 @@ describe('Encrypted Session Persistence (gopay_session)', () => {
       phone_number: '+628123456789',
       merchant_id: 'MID-999',
       outlet_name: 'Test Outlet',
+      device_id: 'test-device-uuid',
       access_token: 'secret_jwt_token',
       refresh_token: 'secret_refresh_token',
       expires_in: 86400
@@ -113,6 +118,7 @@ describe('Encrypted Session Persistence (gopay_session)', () => {
     expect(loaded?.access_token).toBe('secret_jwt_token');
     expect(loaded?.merchant_id).toBe('MID-999');
     expect(loaded?.phone_number).toBe('+628123456789');
+    expect(loaded?.device_id).toBe('test-device-uuid');
   });
 
   it('should restore session from database when session file is absent (stateless/serverless)', async () => {
@@ -148,5 +154,41 @@ describe('Encrypted Session Persistence (gopay_session)', () => {
     });
     expect(rows.rows.length).toBe(1);
     expect(String(rows.rows[0].data)).not.toContain('token_from_db_store');
+  });
+
+  it('should preserve original device_id when refreshing token', async () => {
+    saveSession({
+      phone_number: '+628123456789',
+      merchant_id: 'MID-123',
+      device_id: 'original-unique-device-id-123',
+      access_token: 'old_access_token',
+      refresh_token: 'valid_refresh_token',
+      expires_in: 3600
+    });
+
+    const postSpy = vi.spyOn(axios, 'post').mockResolvedValueOnce({
+      status: 200,
+      data: {
+        data: {
+          access_token: 'new_refreshed_access_token',
+          refresh_token: 'new_refreshed_refresh_token',
+          expires_in: 7200
+        }
+      }
+    });
+
+    const refreshed = await refreshSession();
+    expect(refreshed).not.toBeNull();
+    expect(refreshed?.access_token).toBe('new_refreshed_access_token');
+    expect(refreshed?.device_id).toBe('original-unique-device-id-123');
+    expect(postSpy).toHaveBeenCalledTimes(1);
+    expect(postSpy.mock.calls[0][2]?.headers?.['x-uniqueid']).toBe('original-unique-device-id-123');
+  });
+
+  it('does not refresh legacy sessions without the original device ID', async () => {
+    saveSession({ access_token: 'synthetic-access', refresh_token: 'synthetic-refresh', expires_in: 3600 });
+    const post = vi.spyOn(axios, 'post');
+    expect(await refreshSession()).toBeNull();
+    expect(post).not.toHaveBeenCalled();
   });
 });

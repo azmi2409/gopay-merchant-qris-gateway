@@ -79,7 +79,7 @@ export async function verifyGoBizOtp(
   deviceId: string
 ): Promise<void> {
   const cleanPhone = parsePhoneInput(phone);
-  if (!/^\d{4,8}$/.test(otp) || !otpToken || !deviceId || cleanPhone.length < 8) {
+  if (!/^\d{4,8}$/.test(otp) || !otpToken || typeof deviceId !== 'string' || !/^[a-zA-Z0-9-]{1,128}$/.test(deviceId) || cleanPhone.length < 8) {
     throw new AdminSetupError('Invalid OTP verification request', 400, 'INVALID_OTP_REQUEST');
   }
   const headers = sessionManager.getStandardGoBizHeaders(deviceId);
@@ -142,6 +142,7 @@ export async function verifyGoBizOtp(
     phone_number: `+62${cleanPhone}`,
     merchant_id: merchantId,
     outlet_name: outletName,
+    device_id: deviceId,
     access_token: tokenData.access_token,
     refresh_token: tokenData.refresh_token || null,
     expires_at: new Date(Date.now() + Number(tokenData.expires_in || 86400) * 1000).toISOString()

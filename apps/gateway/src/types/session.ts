@@ -2,6 +2,7 @@ export interface GoPaySession {
   phone_number?: string | null;
   merchant_id?: string | null;
   outlet_name?: string | null;
+  device_id?: string | null;
   access_token: string | null;
   refresh_token: string | null;
   cookie: string | null;
